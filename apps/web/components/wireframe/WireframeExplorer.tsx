@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CalendarDays,
@@ -225,15 +225,26 @@ const screens: Screen[] = [
   }
 ];
 
-const bottomNav: ScreenId[] = ["dashboard", "reservations", "kennel", "care", "admin"];
+const bottomNav: ScreenId[] = ["dashboard", "reservations", "kennel", "checkin", "care", "billing", "reports", "admin"];
 
 export function WireframeExplorer() {
   const [activeId, setActiveId] = useState<ScreenId>("dashboard");
   const [tenantId, setTenantId] = useState(sampleTenants[0].id);
   const [eventLog, setEventLog] = useState<string[]>(["Wireframe loaded", "Super admin controls enabled"]);
+  const [deviceTime, setDeviceTime] = useState("");
   const active = useMemo(() => screens.find((screen) => screen.id === activeId) ?? screens[0], [activeId]);
   const tenant = useMemo(() => sampleTenants.find((item) => item.id === tenantId) ?? sampleTenants[0], [tenantId]);
   const ActiveIcon = active.icon;
+
+  useEffect(() => {
+    function updateTime() {
+      setDeviceTime(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    }
+
+    updateTime();
+    const timer = window.setInterval(updateTime, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   function pushEvent(label: string) {
     setEventLog((items) => [label, ...items].slice(0, 4));
@@ -242,29 +253,12 @@ export function WireframeExplorer() {
   return (
     <main className="min-h-screen bg-[#1b1b1a] px-3 py-3 text-[#f6f1e8]">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-7">
-        <nav className="flex w-full flex-wrap justify-center gap-2">
-          {screens.map((screen) => (
-            <button
-              key={screen.id}
-              type="button"
-              onClick={() => setActiveId(screen.id)}
-              className={`min-h-8 rounded-full border px-4 text-sm font-semibold transition ${
-                activeId === screen.id
-                  ? "border-[#24a36f] bg-[#24a36f] text-white"
-                  : "border-[#696760] bg-[#2b2b29] text-[#d8d1c5] hover:border-[#bdb3a5]"
-              }`}
-            >
-              {screen.label}
-            </button>
-          ))}
-        </nav>
-
         <section className="relative w-full max-w-[390px] overflow-hidden rounded-[30px] border border-[#4d4b46] bg-[#111110] shadow-2xl">
           <div className="border-b border-[#3c3a36] bg-[#2a2a28] px-4 pb-4 pt-3">
             <div className="grid grid-cols-3 items-center text-xs font-bold text-[#d7d1c4]">
-              <span>9:41</span>
+              <span>{deviceTime}</span>
               <span className="text-center">{active.label}</span>
-              <span className="text-right">100%</span>
+              <span />
             </div>
             <div className="mt-7 flex items-center justify-between">
               <div>
@@ -327,7 +321,7 @@ export function WireframeExplorer() {
             </section>
           </div>
 
-          <div className="absolute inset-x-0 bottom-0 grid grid-cols-5 border-t border-[#3f3d38] bg-[#191918]/95 backdrop-blur">
+          <div className="absolute inset-x-0 bottom-0 flex gap-1 overflow-x-auto border-t border-[#3f3d38] bg-[#191918]/95 px-2 backdrop-blur">
             {bottomNav.map((id) => {
               const screen = screens.find((item) => item.id === id) ?? screens[0];
               const Icon = screen.icon;
@@ -336,7 +330,7 @@ export function WireframeExplorer() {
                   key={id}
                   type="button"
                   onClick={() => setActiveId(id)}
-                  className={`grid min-h-16 place-items-center gap-1 text-[11px] font-bold ${activeId === id ? "text-[#34c084]" : "text-[#a9a094]"}`}
+                  className={`grid min-h-16 min-w-[72px] place-items-center gap-1 text-[11px] font-bold ${activeId === id ? "text-[#34c084]" : "text-[#a9a094]"}`}
                 >
                   <Icon size={18} />
                   <span>{screen.label.replace("Kennel map", "Kennel").replace("Daily care", "Care")}</span>
