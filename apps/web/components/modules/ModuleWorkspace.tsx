@@ -15,13 +15,15 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import type { ModuleDefinition } from "@/lib/modules/definitions";
+import { getModuleDefinition, type ModuleDefinition } from "@/lib/modules/definitions";
 
 type ModuleWorkspaceProps = {
   module: ModuleDefinition;
   mode?: "list" | "new" | "detail" | "calendar";
   detailId?: string;
 };
+type FormState = { mode: "create" | "edit"; record?: ModuleRecord; module?: ModuleDefinition };
+type DetailState = { record: ModuleRecord; module: ModuleDefinition };
 
 type ModuleRecord = ModuleDefinition["records"][number];
 type ModuleTransaction = ModuleDefinition["transactions"][number];
@@ -223,17 +225,21 @@ function getRecordAmount(moduleId: string, draft: DraftRecord, existing?: Module
 
 export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorkspaceProps) {
   const [records, setRecords] = useState(module.records);
+  const [relatedOwners, setRelatedOwners] = useState<ModuleRecord[]>([]);
   const [transactions, setTransactions] = useState(module.transactions);
   const [selectedId, setSelectedId] = useState(detailId ?? module.records[0]?.id);
   const [query, setQuery] = useState("");
-  const [detailRecord, setDetailRecord] = useState<ModuleRecord | null>(() =>
-    mode === "detail" ? module.records.find((record) => record.id === detailId) ?? module.records[0] ?? null : null
+  const [detailState, setDetailState] = useState<DetailState | null>(() =>
+    mode === "detail"
+      ? { module, record: module.records.find((record) => record.id === detailId) ?? module.records[0] }
+      : null
   );
-  const [formState, setFormState] = useState<{ mode: "create" | "edit"; record?: ModuleRecord } | null>(
+  const [formState, setFormState] = useState<FormState | null>(
     mode === "new" ? { mode: "create" } : null
   );
   const apiPath = getModuleApiPath(module.id);
   const fields = getModuleFields(module.id);
+  const ownerModule = getModuleDefinition("owners");
   const selected = useMemo(
     () => records.find((record) => record.id === selectedId) ?? records[0],
     [records, selectedId]
@@ -267,6 +273,20 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
     };
   }, [apiPath]);
 
+  useEffect(() => {
+    if (module.id !== "pets") return;
+    let active = true;
+    fetch("/api/owners")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { records?: ModuleRecord[] } | null) => {
+        if (active && payload?.records) setRelatedOwners(payload.records);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [module.id]);
+
   function pushTransaction(label: string) {
     const transaction: ModuleTransaction = {
       id: `${module.id}-tx-${Date.now()}`,
@@ -277,43 +297,57 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
     setTransactions((current) => [transaction, ...current].slice(0, 8));
   }
 
-  function openDetail(record: ModuleRecord) {
+  function openDetail(record: ModuleRecord, detailModule = module) {
     setSelectedId(record.id);
-    setDetailRecord(record);
-    pushTransaction(`${record.title} opened`);
+    setDetailState({ module: detailModule, record });
+    pushTransaction(`${detailModule.label}: ${record.title} opened`);
   }
 
   async function saveRecord(draft: DraftRecord) {
+    const targetModule = formState?.module ?? module;
+    const targetApiPath = getModuleApiPath(targetModule.id);
     if (formState?.mode === "edit" && formState.record) {
-      const updated = buildRecordFromDraft(module, draft, formState.record);
-      setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
+      const updated = buildRecordFromDraft(targetModule, draft, formState.record);
+      if (targetModule.id === module.id) {
+        setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
+      } else if (targetModule.id === "owners") {
+        setRelatedOwners((current) => current.map((record) => (record.id === updated.id ? updated : record)));
+      }
       setSelectedId(updated.id);
-      setDetailRecord(updated);
-      pushTransaction(`${module.label} record updated`);
+      setDetailState({ module: targetModule, record: updated });
+      pushTransaction(`${targetModule.label} record updated`);
       setFormState(null);
-      const payload = await saveToApi(apiPath, "PATCH", updated);
+      const payload = await saveToApi(targetApiPath, "PATCH", updated);
       if (payload?.transactions) setTransactions(payload.transactions);
       return;
     }
 
-    const draftRecord = buildRecordFromDraft(module, draft);
-    const payload = await saveToApi(apiPath, "POST", draftRecord);
+    const draftRecord = buildRecordFromDraft(targetModule, draft);
+    const payload = await saveToApi(targetApiPath, "POST", draftRecord);
     const created = payload?.record ?? draftRecord;
-    setRecords((current) => [created, ...current]);
+    if (targetModule.id === module.id) {
+      setRecords((current) => [created, ...current]);
+    } else if (targetModule.id === "owners") {
+      setRelatedOwners((current) => [created, ...current]);
+    }
     setSelectedId(created.id);
-    setDetailRecord(created);
-    pushTransaction(`${module.primaryAction} completed`);
+    setDetailState({ module: targetModule, record: created });
+    pushTransaction(`${targetModule.primaryAction} completed`);
     if (payload?.transactions) setTransactions(payload.transactions);
     setFormState(null);
   }
 
-  async function deleteSelected(record: ModuleRecord) {
-    const nextRecord = records.find((item) => item.id !== record.id);
-    setRecords((current) => current.filter((item) => item.id !== record.id));
-    setDetailRecord(null);
-    setSelectedId(nextRecord?.id ?? "");
-    pushTransaction(`${record.title} deleted`);
-    const payload = await saveToApi(apiPath, "DELETE", { id: record.id });
+  async function deleteSelected(record: ModuleRecord, targetModule = module) {
+    if (targetModule.id === module.id) {
+      const nextRecord = records.find((item) => item.id !== record.id);
+      setRecords((current) => current.filter((item) => item.id !== record.id));
+      setSelectedId(nextRecord?.id ?? "");
+    } else if (targetModule.id === "owners") {
+      setRelatedOwners((current) => current.filter((item) => item.id !== record.id));
+    }
+    setDetailState(null);
+    pushTransaction(`${targetModule.label}: ${record.title} deleted`);
+    const payload = await saveToApi(getModuleApiPath(targetModule.id), "DELETE", { id: record.id });
     if (payload?.transactions) setTransactions(payload.transactions);
   }
 
@@ -347,6 +381,43 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
           <Metric label="Txns" value={transactions.length.toString()} />
         </div>
       </section>
+
+      {module.id === "pets" && ownerModule ? (
+        <section className="rounded-lg border border-[#34322f] bg-[#201f1d] p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="font-bold text-[#f6f1e8]">Owners</h2>
+              <p className="text-xs font-semibold text-[#b9b0a3]">Add or update owner details before creating pets.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormState({ mode: "create", module: ownerModule })}
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md bg-[#34c084] px-3 text-xs font-bold text-white"
+            >
+              <Plus size={16} />
+              Add owner
+            </button>
+          </div>
+          <div className="grid gap-2">
+            {relatedOwners.map((owner) => (
+              <button
+                key={owner.id}
+                type="button"
+                onClick={() => openDetail(owner, ownerModule)}
+                className="rounded-md border border-[#4a4842] bg-[#151514] p-3 text-left"
+              >
+                <div className="font-bold text-[#f6f1e8]">{owner.title}</div>
+                <div className="mt-1 text-xs font-semibold text-[#b9b0a3]">{owner.subtitle}</div>
+              </button>
+            ))}
+            {!relatedOwners.length ? (
+              <div className="rounded-md border border-[#4a4842] bg-[#151514] p-3 text-xs font-semibold text-[#b9b0a3]">
+                No owners loaded yet. Use Add owner to create the first owner.
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       {mode === "calendar" ? (
         <FlowBoard module={module} records={records} onOpen={openDetail} />
@@ -410,20 +481,24 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
         </div>
       </section>
 
-      {detailRecord ? (
+      {detailState ? (
         <DetailSheet
-          record={detailRecord}
-          module={module}
-          fields={fields}
-          onClose={() => setDetailRecord(null)}
-          onEdit={() => setFormState({ mode: "edit", record: detailRecord })}
-          onDelete={() => deleteSelected(detailRecord)}
+          record={detailState.record}
+          module={detailState.module}
+          fields={getModuleFields(detailState.module.id)}
+          onClose={() => setDetailState(null)}
+          onEdit={() => setFormState({ mode: "edit", record: detailState.record, module: detailState.module })}
+          onDelete={() => deleteSelected(detailState.record, detailState.module)}
           onStatus={(status) => {
-            const updated = { ...detailRecord, status, data: { ...(detailRecord.data ?? {}), status } };
-            setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
-            setDetailRecord(updated);
-            pushTransaction(`${detailRecord.title} marked ${status}`);
-            saveToApi(apiPath, "PATCH", updated).then((payload) => {
+            const updated = { ...detailState.record, status, data: { ...(detailState.record.data ?? {}), status } };
+            if (detailState.module.id === module.id) {
+              setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
+            } else if (detailState.module.id === "owners") {
+              setRelatedOwners((current) => current.map((record) => (record.id === updated.id ? updated : record)));
+            }
+            setDetailState({ module: detailState.module, record: updated });
+            pushTransaction(`${detailState.record.title} marked ${status}`);
+            saveToApi(getModuleApiPath(detailState.module.id), "PATCH", updated).then((payload) => {
               if (payload?.transactions) setTransactions(payload.transactions);
             });
           }}
@@ -432,8 +507,8 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
 
       {formState ? (
         <RecordFormSheet
-          module={module}
-          fields={fields}
+          module={formState.module ?? module}
+          fields={getModuleFields((formState.module ?? module).id)}
           state={formState}
           onClose={() => setFormState(null)}
           onSave={saveRecord}

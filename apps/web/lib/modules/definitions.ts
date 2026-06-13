@@ -59,9 +59,9 @@ export const moduleDefinitions: ModuleDefinition[] = [
   {
     id: "owners",
     label: "Owners",
-    href: "/owners",
+    href: "/pets",
     icon: "users",
-    summary: "Owner profiles, contacts, notes, emergency information, pets, and payment history.",
+    summary: "Owner profiles, contacts, notes, emergency information, pets, and payment history inside Pets.",
     primaryAction: "Add owner",
     records: [
       { id: "own-201", title: "Asha Rao", subtitle: "2 pets, Bengaluru", status: "active" },
@@ -78,7 +78,7 @@ export const moduleDefinitions: ModuleDefinition[] = [
     label: "Pets",
     href: "/pets",
     icon: "paw",
-    summary: "Pet profiles, vaccinations, feeding instructions, special needs, photos, and history.",
+    summary: "Owner and pet profiles, vaccinations, feeding instructions, special needs, photos, and history.",
     primaryAction: "Add pet",
     records: [
       { id: "pet-301", title: "Bailey", subtitle: "Golden Retriever, Asha Rao", status: "vaccines ok" },
