@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { loadLocalOwners, mergeOwners } from "@/lib/owners-pets/local";
+import { loadLocalOwners, mergeOwners, saveLocalPet } from "@/lib/owners-pets/local";
 import type { Owner, Pet } from "@/lib/owners-pets/store";
 
 const species = ["dog", "cat", "rabbit", "bird", "other"] as const;
@@ -39,7 +39,9 @@ export function PetForm({ pet }: { pet?: Pet | null }) {
       return;
     }
     const payload = await response.json();
-    router.push(`/pets/${payload.id ?? payload.data?.id ?? pet?.id}`);
+    const savedPet = (payload.data ?? payload) as Pet;
+    if (savedPet?.id) saveLocalPet(savedPet);
+    router.push(`/pets/${savedPet.id ?? pet?.id}`);
     router.refresh();
   }
 

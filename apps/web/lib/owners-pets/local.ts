@@ -1,11 +1,20 @@
 "use client";
 
-import type { Owner } from "@/lib/owners-pets/store";
+import type { Owner, Pet } from "@/lib/owners-pets/store";
 
 const ownerKey = "pawbase:owners:local";
 const legacyOwnerRecordKey = "pawbase:owners:records";
+const petKey = "pawbase:pets:local";
+const legacyPetRecordKey = "pawbase:pets:records";
 
 type LegacyOwnerRecord = {
+  id: string;
+  title?: string;
+  subtitle?: string;
+  data?: Record<string, string>;
+};
+
+type LegacyPetRecord = {
   id: string;
   title?: string;
   subtitle?: string;
@@ -85,11 +94,99 @@ export function saveLocalOwner(owner: Owner) {
   window.localStorage.setItem(ownerKey, JSON.stringify(next));
 }
 
+export function loadLocalPets() {
+  if (typeof window === "undefined") return [];
+  const localPets = readPets(petKey);
+  const legacyPets = readLegacyPets();
+  return mergePets(localPets, legacyPets);
+}
+
+export function saveLocalPet(pet: Pet) {
+  if (typeof window === "undefined") return;
+  const pets = loadLocalPets();
+  const next = [pet, ...pets.filter((item) => item.id !== pet.id)];
+  window.localStorage.setItem(petKey, JSON.stringify(next));
+}
+
+function readPets(key: string) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) ?? "[]") as Pet[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function readLegacyPets() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(legacyPetRecordKey) ?? "[]") as LegacyPetRecord[];
+    if (!Array.isArray(parsed)) return [];
+    const pets: Pet[] = [];
+    for (const record of parsed) {
+      const pet = legacyRecordToPet(record);
+      if (pet) pets.push(pet);
+    }
+    return pets;
+  } catch {
+    return [];
+  }
+}
+
+function legacyRecordToPet(record: LegacyPetRecord): Pet | null {
+  const data = record.data ?? {};
+  const name = data.name || record.title;
+  if (!record.id || !name) return null;
+  const subtitleParts = (record.subtitle ?? "").split(/[Â·Ã‚]/).map((part) => part.trim()).filter(Boolean);
+  return {
+    id: record.id,
+    owner_id: data.owner_id || "unknown-owner",
+    name,
+    species: normalizeSpecies(data.species || subtitleParts[0]),
+    breed: data.breed || subtitleParts[1],
+    color: data.color,
+    gender: normalizeGender(data.gender),
+    date_of_birth: data.date_of_birth,
+    weight_kg: data.weight_kg ? Number(data.weight_kg) : undefined,
+    microchip_number: data.microchip_number,
+    is_neutered: data.is_neutered === "true",
+    temperament: normalizeTemperament(data.temperament),
+    feeding_instructions: data.feeding_instructions || data.feeding_notes,
+    special_needs: data.special_needs,
+    photo_url: data.photo_url,
+    is_active: true,
+    created_at: new Date().toISOString()
+  };
+}
+
+function normalizeSpecies(value?: string): Pet["species"] {
+  if (value === "cat" || value === "rabbit" || value === "bird" || value === "other") return value;
+  return "dog";
+}
+
+function normalizeGender(value?: string): Pet["gender"] {
+  if (value === "male" || value === "female") return value;
+  return "unknown";
+}
+
+function normalizeTemperament(value?: string): Pet["temperament"] | undefined {
+  if (value === "friendly" || value === "anxious" || value === "aggressive" || value === "calm" || value === "energetic" || value === "shy") return value;
+  return undefined;
+}
+
 export function mergeOwners(primary: Owner[], secondary: Owner[]) {
   const seen = new Set<string>();
   return [...primary, ...secondary].filter((owner) => {
     if (seen.has(owner.id)) return false;
     seen.add(owner.id);
+    return true;
+  });
+}
+
+export function mergePets(primary: Pet[], secondary: Pet[]) {
+  const seen = new Set<string>();
+  return [...primary, ...secondary].filter((pet) => {
+    if (seen.has(pet.id)) return false;
+    seen.add(pet.id);
     return true;
   });
 }
