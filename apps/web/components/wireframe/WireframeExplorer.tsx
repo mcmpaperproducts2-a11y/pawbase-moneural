@@ -29,6 +29,7 @@ type ScreenId = "dashboard" | "reservations" | "entry" | "kennel" | "checkin" | 
 type CrudAction = "create" | "view" | "edit" | "delete";
 type RoleKey = "super_admin" | "manager" | "receptionist";
 type EntryContext = { screenId: ScreenId; action: Extract<CrudAction, "create" | "edit"> };
+type ModuleRecord = { id: string; title: string; meta: string; status: string; amount?: string };
 
 type Screen = {
   id: ScreenId;
@@ -337,6 +338,52 @@ const moduleFormByScreen: Record<ScreenId, string> = {
   admin: "admin"
 };
 
+const moduleRecords: Record<ScreenId, ModuleRecord[]> = {
+  dashboard: [
+    { id: "dash-1", title: "Bruno care handoff", meta: "Garden A-03 - morning care complete", status: "Active" },
+    { id: "dash-2", title: "Royal Canin reorder", meta: "Inventory below reorder level", status: "Needs action" },
+    { id: "dash-3", title: "Coco vaccination review", meta: "Rabies expires in 8 days", status: "Alert" }
+  ],
+  reservations: [
+    { id: "res-1", title: "Rio - Deluxe kennel", meta: "15 Jun to 19 Jun - Menon family", status: "Quote", amount: "INR 7,200" },
+    { id: "res-2", title: "Tuna - Cat cabin", meta: "16 Jun to 18 Jun - Iyer family", status: "Confirmed", amount: "Paid" },
+    { id: "res-3", title: "Bruno - Garden A-03", meta: "Grooming add-on requested", status: "Edit" }
+  ],
+  entry: [
+    { id: "entry-1", title: "Reservation draft", meta: "Owner, pet, dates, unit, services", status: "Draft" }
+  ],
+  kennel: [
+    { id: "ken-1", title: "Garden A-03", meta: "Occupied by Bruno - checkout 18 Jun", status: "Occupied" },
+    { id: "ken-2", title: "Deluxe B-07", meta: "Ready for Rio - sanitized 9:20", status: "Reserved" },
+    { id: "ken-3", title: "Cat cabin C-01", meta: "Quiet zone - Mochi", status: "Occupied" }
+  ],
+  checkin: [
+    { id: "chk-1", title: "Ruby arrival", meta: "Vaccination verified - condition photo pending", status: "In progress" },
+    { id: "chk-2", title: "Coco departure", meta: "Invoice ready - receipt pending", status: "Close out" },
+    { id: "chk-3", title: "Rio arrival prep", meta: "Unit B-07 assigned", status: "Ready" }
+  ],
+  care: [
+    { id: "care-1", title: "Morning feed round", meta: "16 of 18 complete - wet food exception", status: "Open" },
+    { id: "care-2", title: "Milo antibiotic", meta: "Due now - vet staff assigned", status: "Due" },
+    { id: "care-3", title: "Evening play group", meta: "Outdoor yard - group A", status: "Planned" }
+  ],
+  billing: [
+    { id: "bill-1", title: "INV-701 - Bailey stay", meta: "Boarding + grooming - GST included", status: "Paid", amount: "INR 8,496" },
+    { id: "bill-2", title: "INV-702 - Milo stay", meta: "UPI link sent - awaiting webhook", status: "Pending", amount: "INR 5,400" },
+    { id: "bill-3", title: "Counter POS sale", meta: "Treats + shampoo", status: "Checkout", amount: "INR 1,120" }
+  ],
+  reports: [
+    { id: "rep-1", title: "Occupancy trend", meta: "Peak weekends - 30-day window", status: "View" },
+    { id: "rep-2", title: "Revenue by service", meta: "Boarding, grooming, retail split", status: "CSV" },
+    { id: "rep-3", title: "Staff efficiency", meta: "Task completion by shift", status: "Open" }
+  ],
+  admin: [
+    { id: "adm-1", title: "PawBase Super Admin", meta: "admin@example.com - all controls", status: "Active" },
+    { id: "adm-2", title: "Role matrix", meta: "CRUD permissions per module", status: "Edit" },
+    { id: "adm-3", title: "Audit log", meta: "User, table, action, date, diff export", status: "Open" }
+  ]
+};
+
 function getEntryForm(screenId: ScreenId) {
   return entryForms.find((form) => form.id === moduleFormByScreen[screenId]) ?? entryForms[0];
 }
@@ -541,6 +588,9 @@ function ModulePanel({
 }) {
   const [activeAction, setActiveAction] = useState<CrudAction>("view");
   const allowedActions = roleActionPermissions[activeRole];
+  const records = moduleRecords[active.id] ?? [];
+  const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id ?? "");
+  const selectedRecord = records.find((record) => record.id === selectedRecordId) ?? records[0];
   const handleAction = (nextAction: CrudAction) => {
     if (nextAction === "create" || nextAction === "edit") {
       onOpenEntry(active.id, nextAction);
@@ -550,6 +600,20 @@ function ModulePanel({
     setActiveAction(nextAction);
     onEvent(`${active.label}: ${nextAction} opened`);
   };
+  const moduleFlow = (
+    <ModuleFlowPanel
+      active={active}
+      records={records}
+      selectedRecord={selectedRecord}
+      selectedRecordId={selectedRecord?.id ?? ""}
+      allowedActions={allowedActions}
+      onSelect={(record) => {
+        setSelectedRecordId(record.id);
+        onEvent(`${active.label}: ${record.title} opened`);
+      }}
+      onAction={handleAction}
+    />
+  );
 
   if (active.id === "reservations") {
     return (
@@ -562,6 +626,7 @@ function ModulePanel({
           onAction={handleAction}
           onEvent={onEvent}
         />
+        {moduleFlow}
         <div className="mb-3 rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-bold text-[#d8cfbf]">
           Tenant-scoped bookings for {tenant.name}
         </div>
@@ -618,6 +683,7 @@ function ModulePanel({
           onAction={handleAction}
           onEvent={onEvent}
         />
+        {moduleFlow}
         <div className="mb-3 rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-bold text-[#d8cfbf]">
           {tenant.occupancy} occupied · {tenant.region}
         </div>
@@ -655,6 +721,7 @@ function ModulePanel({
           onAction={handleAction}
           onEvent={onEvent}
         />
+        {moduleFlow}
         <div className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-4">
           {["Reservation found", "Vaccination verified", "Condition photo attached", "Medication handover", "Staff signature"].map((step, index) => (
             <button key={step} onClick={() => onEvent(`${step} completed`)} className="flex w-full items-center gap-3 border-b border-[#44413b] py-3 last:border-b-0" type="button">
@@ -678,6 +745,7 @@ function ModulePanel({
           onAction={handleAction}
           onEvent={onEvent}
         />
+        {moduleFlow}
         <div className="grid gap-3">
           {["Morning", "Afternoon", "Evening"].map((period) => (
             <div key={period} className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
@@ -708,6 +776,7 @@ function ModulePanel({
           onAction={handleAction}
           onEvent={onEvent}
         />
+        {moduleFlow}
         <div className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-4">
           {[
             ["Boarding nights", "₹6,000"],
@@ -738,6 +807,7 @@ function ModulePanel({
           onAction={handleAction}
           onEvent={onEvent}
         />
+        {moduleFlow}
         <div className="grid gap-3">
           {["Occupancy", "Revenue", "Staff efficiency"].map((report, index) => (
             <button key={report} onClick={() => onEvent(`${report} CSV exported`)} className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3 text-left" type="button">
@@ -766,6 +836,7 @@ function ModulePanel({
           onAction={handleAction}
           onEvent={onEvent}
         />
+        {moduleFlow}
         <div className="rounded-lg border border-[#28634d] bg-[#1f342b] p-3 text-sm font-bold text-[#9ce4bf]">admin@example.com has all create, read, update, delete, and manage permissions.</div>
         <div className="mt-3 rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
           <div className="text-xs font-bold uppercase text-[#d7cfbf]">Tenant administration</div>
@@ -792,6 +863,7 @@ function ModulePanel({
         onAction={handleAction}
         onEvent={onEvent}
       />
+      {moduleFlow}
       {active.sections.map((section) => (
         <section key={section.title} className="mt-4">
           <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">{section.title}</h2>
@@ -799,6 +871,101 @@ function ModulePanel({
         </section>
       ))}
     </>
+  );
+}
+
+function ModuleFlowPanel({
+  active,
+  records,
+  selectedRecord,
+  selectedRecordId,
+  allowedActions,
+  onSelect,
+  onAction
+}: {
+  active: Screen;
+  records: ModuleRecord[];
+  selectedRecord?: ModuleRecord;
+  selectedRecordId: string;
+  allowedActions: CrudAction[];
+  onSelect: (record: ModuleRecord) => void;
+  onAction: (action: CrudAction) => void;
+}) {
+  const canCreate = allowedActions.includes("create");
+  const canEdit = allowedActions.includes("edit");
+  const canDelete = allowedActions.includes("delete");
+
+  return (
+    <div className="mb-3 rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs font-bold uppercase text-[#d7cfbf]">Workspace</div>
+          <div className="truncate text-sm font-bold">{active.label} records</div>
+        </div>
+        <button
+          type="button"
+          disabled={!canCreate}
+          onClick={() => onAction("create")}
+          className="h-9 shrink-0 rounded-md bg-[#34c084] px-3 text-xs font-bold text-white disabled:bg-[#36332f] disabled:text-[#696156]"
+        >
+          New
+        </button>
+      </div>
+
+      <div className="grid gap-2">
+        {records.map((record) => (
+          <button
+            key={record.id}
+            type="button"
+            onClick={() => onSelect(record)}
+            className={`flex min-h-[54px] items-center justify-between gap-3 rounded-md border p-3 text-left ${
+              selectedRecordId === record.id ? "border-[#34c084] bg-[#18382d]" : "border-[#4a4842] bg-[#20201e]"
+            }`}
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-bold">{record.title}</span>
+              <span className="block truncate text-xs font-semibold text-[#cabead]">{record.meta}</span>
+            </span>
+            <span className="shrink-0 rounded-full bg-[#ecf4ff] px-2 py-1 text-[11px] font-bold text-[#0d5c9d]">{record.status}</span>
+          </button>
+        ))}
+      </div>
+
+      {selectedRecord ? (
+        <div className="mt-3 rounded-md border border-[#4a4842] bg-[#20201e] p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase text-[#cabead]">Selected record</div>
+              <div className="mt-1 truncate text-sm font-bold">{selectedRecord.title}</div>
+              <div className="mt-1 text-xs font-semibold text-[#cabead]">{selectedRecord.meta}</div>
+              {selectedRecord.amount ? <div className="mt-2 text-sm font-bold text-[#60c94d]">{selectedRecord.amount}</div> : null}
+            </div>
+            <span className="rounded-full border border-[#4a4842] px-2 py-1 text-[11px] font-bold text-[#d7cfbf]">{selectedRecord.status}</span>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <button type="button" onClick={() => onAction("view")} className="h-9 rounded-md border border-[#4a4842] bg-[#2c2c2a] text-xs font-bold">
+              View
+            </button>
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => onAction("edit")}
+              className="h-9 rounded-md border border-[#4a4842] bg-[#2c2c2a] text-xs font-bold disabled:text-[#696156]"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              disabled={!canDelete}
+              onClick={() => onAction("delete")}
+              className="h-9 rounded-md border border-[#774747] bg-[#392727] text-xs font-bold text-[#f3b5a9] disabled:border-[#36332f] disabled:bg-[#191917] disabled:text-[#696156]"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
