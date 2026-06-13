@@ -16,6 +16,7 @@ import {
   Map,
   PawPrint,
   Plus,
+  ArrowLeft,
   Settings,
   ShieldCheck,
   TrendingUp,
@@ -27,6 +28,7 @@ import { sampleTenants } from "@/lib/data/sample-saas-data";
 type ScreenId = "dashboard" | "reservations" | "entry" | "kennel" | "checkin" | "care" | "billing" | "reports" | "admin";
 type CrudAction = "create" | "view" | "edit" | "delete";
 type RoleKey = "super_admin" | "manager" | "receptionist";
+type EntryContext = { screenId: ScreenId; action: Extract<CrudAction, "create" | "edit"> };
 
 type Screen = {
   id: ScreenId;
@@ -335,11 +337,16 @@ const moduleFormByScreen: Record<ScreenId, string> = {
   admin: "admin"
 };
 
+function getEntryForm(screenId: ScreenId) {
+  return entryForms.find((form) => form.id === moduleFormByScreen[screenId]) ?? entryForms[0];
+}
+
 export function WireframeExplorer() {
   const [activeId, setActiveId] = useState<ScreenId>("dashboard");
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [tenantId, setTenantId] = useState(sampleTenants[0].id);
   const [activeRole, setActiveRole] = useState<RoleKey>("super_admin");
+  const [entryContext, setEntryContext] = useState<EntryContext | null>(null);
   const [eventLog, setEventLog] = useState<string[]>(["Wireframe loaded", "Super admin controls enabled"]);
   const [deviceTime, setDeviceTime] = useState("");
   const active = useMemo(() => screens.find((screen) => screen.id === activeId) ?? screens[0], [activeId]);
@@ -361,18 +368,20 @@ export function WireframeExplorer() {
   }
 
   return (
-    <main className="min-h-screen bg-[#1b1b1a] px-3 py-3 text-[#f6f1e8]">
-      <div className="mx-auto flex max-w-6xl flex-col items-center gap-7">
-        <section className="relative w-full max-w-[390px] overflow-hidden rounded-[30px] border border-[#4d4b46] bg-[#111110] shadow-2xl">
-          <div className="border-b border-[#3c3a36] bg-[#2a2a28] px-4 pb-4 pt-3">
+    <main className="grid h-screen overflow-hidden bg-[#1b1b1a] px-2 py-2 text-[#f6f1e8]">
+      <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-center">
+        <section className="relative flex h-full max-h-[900px] min-h-0 w-full max-w-[390px] flex-col overflow-hidden rounded-[30px] border border-[#4d4b46] bg-[#111110] shadow-2xl">
+          <div className="shrink-0 border-b border-[#3c3a36] bg-[#2a2a28] px-4 pb-3 pt-3">
             <div className="grid grid-cols-3 items-center text-xs font-bold text-[#d7d1c4]">
               <span>{deviceTime}</span>
-              <span className="text-center">{isLoggedIn ? active.label : "Login"}</span>
+              <span className="text-center">{isLoggedIn ? (entryContext ? "Entry" : active.label) : "Login"}</span>
               <span />
             </div>
-            <div className="mt-7 flex items-center justify-between">
+            <div className="mt-5 flex items-center justify-between">
               <div>
-                <h1 className="text-lg font-bold leading-tight">{isLoggedIn ? active.title : "Sign in to PawBase"}</h1>
+                <h1 className="text-lg font-bold leading-tight">
+                  {isLoggedIn ? (entryContext ? `${entryContext.action === "create" ? "New" : "Edit"} ${getEntryForm(entryContext.screenId).label}` : active.title) : "Sign in to PawBase"}
+                </h1>
                 <p className="text-sm text-[#d5c9b7]">
                   {isLoggedIn ? `${tenant.name} · ${tenant.plan} plan` : "admin@example.com · admin123"}
                 </p>
@@ -391,7 +400,7 @@ export function WireframeExplorer() {
               </button>
             </div>
             {isLoggedIn ? (
-              <div className="mt-4 grid grid-cols-[1fr_120px] gap-2">
+              <div className="mt-3 grid grid-cols-[1fr_120px] gap-2">
                 <select
                   value={tenantId}
                   onChange={(event) => {
@@ -422,7 +431,7 @@ export function WireframeExplorer() {
             ) : null}
           </div>
 
-          <div className="max-h-[660px] min-h-[630px] overflow-y-auto px-4 pb-24 pt-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4">
             {isLoggedIn ? (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -447,7 +456,28 @@ export function WireframeExplorer() {
                   <div className="mt-1 text-xs font-semibold text-[#d7cfbf]">18 of 24 units occupied — 75%</div>
                 </div>
 
-                <ModulePanel active={active} tenant={tenant} activeRole={activeRole} onEvent={pushEvent} onNavigate={setActiveId} />
+                {entryContext ? (
+                  <EntryWorkspace
+                    context={entryContext}
+                    tenant={tenant}
+                    role={activeRole}
+                    onEvent={pushEvent}
+                    onBack={() => setEntryContext(null)}
+                    onSave={(label) => {
+                      pushEvent(label);
+                      setEntryContext(null);
+                    }}
+                  />
+                ) : (
+                  <ModulePanel
+                    active={active}
+                    tenant={tenant}
+                    activeRole={activeRole}
+                    onEvent={pushEvent}
+                    onNavigate={setActiveId}
+                    onOpenEntry={(screenId, action) => setEntryContext({ screenId, action })}
+                  />
+                )}
 
                 <section className="mt-4">
                   <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Transactions</h2>
@@ -489,11 +519,6 @@ export function WireframeExplorer() {
             })}
           </div>
         </section>
-
-        <div className="hidden items-center gap-2 rounded-full border border-[#494640] px-4 py-2 text-sm font-semibold text-[#cfc5b6] sm:flex">
-          <LockKeyhole size={16} />
-          Super admin demo: admin@example.com / admin123
-        </div>
       </div>
     </main>
   );
@@ -504,16 +529,27 @@ function ModulePanel({
   tenant,
   activeRole,
   onEvent,
-  onNavigate
+  onNavigate,
+  onOpenEntry
 }: {
   active: Screen;
   tenant: (typeof sampleTenants)[number];
   activeRole: RoleKey;
   onEvent: (label: string) => void;
   onNavigate: (screen: ScreenId) => void;
+  onOpenEntry: (screenId: ScreenId, action: Extract<CrudAction, "create" | "edit">) => void;
 }) {
   const [activeAction, setActiveAction] = useState<CrudAction>("view");
   const allowedActions = roleActionPermissions[activeRole];
+  const handleAction = (nextAction: CrudAction) => {
+    if (nextAction === "create" || nextAction === "edit") {
+      onOpenEntry(active.id, nextAction);
+      onEvent(`${active.label}: ${nextAction} form opened`);
+      return;
+    }
+    setActiveAction(nextAction);
+    onEvent(`${active.label}: ${nextAction} opened`);
+  };
 
   if (active.id === "reservations") {
     return (
@@ -523,10 +559,7 @@ function ModulePanel({
           active={active}
           action={activeAction}
           allowedActions={allowedActions}
-          onAction={(nextAction) => {
-            setActiveAction(nextAction);
-            onEvent(`${active.label}: ${nextAction} opened`);
-          }}
+          onAction={handleAction}
           onEvent={onEvent}
         />
         <div className="mb-3 rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-bold text-[#d8cfbf]">
@@ -535,7 +568,7 @@ function ModulePanel({
         <button
           type="button"
           onClick={() => {
-            setActiveAction("create");
+            onOpenEntry(active.id, "create");
             onEvent("New reservation form opened");
           }}
           className="mb-3 flex min-h-[58px] w-full items-center gap-3 rounded-lg border border-[#2fad7e] bg-[#18382d] p-3 text-left"
@@ -549,28 +582,6 @@ function ModulePanel({
           </span>
           <span className="rounded-full bg-[#ecf4ff] px-2 py-1 text-xs font-bold text-[#0d5c9d]">New</span>
         </button>
-        <div className="mb-3 rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
-          <div className="mb-2 text-xs font-bold uppercase text-[#d7cfbf]">Quick entry form</div>
-          <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
-            {["Owner", "Pet", "Dates", "Unit"].map((field) => (
-              <button
-                key={field}
-                type="button"
-                onClick={() => onEvent(`${field} selected for new reservation`)}
-                className="h-10 rounded-md border border-[#4a4842] bg-[#20201e] px-2 text-left text-[#f6f1e8]"
-              >
-                {field}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => onEvent("Reservation saved as confirmed")}
-            className="mt-3 h-10 w-full rounded-md bg-[#34c084] text-sm font-bold text-white"
-          >
-            Save reservation
-          </button>
-        </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold">
           {["Inquiry", "Confirmed", "Checked-in"].map((stage, index) => (
             <button key={stage} onClick={() => onEvent(`${stage} lane opened`)} className="rounded-md border border-[#46433d] bg-[#242421] p-3" type="button">
@@ -604,10 +615,7 @@ function ModulePanel({
           active={active}
           action={activeAction}
           allowedActions={allowedActions}
-          onAction={(nextAction) => {
-            setActiveAction(nextAction);
-            onEvent(`${active.label}: ${nextAction} opened`);
-          }}
+          onAction={handleAction}
           onEvent={onEvent}
         />
         <div className="mb-3 rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-bold text-[#d8cfbf]">
@@ -644,10 +652,7 @@ function ModulePanel({
           active={active}
           action={activeAction}
           allowedActions={allowedActions}
-          onAction={(nextAction) => {
-            setActiveAction(nextAction);
-            onEvent(`${active.label}: ${nextAction} opened`);
-          }}
+          onAction={handleAction}
           onEvent={onEvent}
         />
         <div className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-4">
@@ -670,10 +675,7 @@ function ModulePanel({
           active={active}
           action={activeAction}
           allowedActions={allowedActions}
-          onAction={(nextAction) => {
-            setActiveAction(nextAction);
-            onEvent(`${active.label}: ${nextAction} opened`);
-          }}
+          onAction={handleAction}
           onEvent={onEvent}
         />
         <div className="grid gap-3">
@@ -703,10 +705,7 @@ function ModulePanel({
           active={active}
           action={activeAction}
           allowedActions={allowedActions}
-          onAction={(nextAction) => {
-            setActiveAction(nextAction);
-            onEvent(`${active.label}: ${nextAction} opened`);
-          }}
+          onAction={handleAction}
           onEvent={onEvent}
         />
         <div className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-4">
@@ -736,10 +735,7 @@ function ModulePanel({
           active={active}
           action={activeAction}
           allowedActions={allowedActions}
-          onAction={(nextAction) => {
-            setActiveAction(nextAction);
-            onEvent(`${active.label}: ${nextAction} opened`);
-          }}
+          onAction={handleAction}
           onEvent={onEvent}
         />
         <div className="grid gap-3">
@@ -767,10 +763,7 @@ function ModulePanel({
           active={active}
           action={activeAction}
           allowedActions={allowedActions}
-          onAction={(nextAction) => {
-            setActiveAction(nextAction);
-            onEvent(`${active.label}: ${nextAction} opened`);
-          }}
+          onAction={handleAction}
           onEvent={onEvent}
         />
         <div className="rounded-lg border border-[#28634d] bg-[#1f342b] p-3 text-sm font-bold text-[#9ce4bf]">admin@example.com has all create, read, update, delete, and manage permissions.</div>
@@ -796,10 +789,7 @@ function ModulePanel({
         active={active}
         action={activeAction}
         allowedActions={allowedActions}
-        onAction={(nextAction) => {
-          setActiveAction(nextAction);
-          onEvent(`${active.label}: ${nextAction} opened`);
-        }}
+        onAction={handleAction}
         onEvent={onEvent}
       />
       {active.sections.map((section) => (
@@ -899,6 +889,115 @@ function ModuleActionPanel({
           {action === "create" ? "Save new record" : "Save changes"}
         </button>
       ) : null}
+    </div>
+  );
+}
+
+function EntryWorkspace({
+  context,
+  tenant,
+  role,
+  onEvent,
+  onBack,
+  onSave
+}: {
+  context: EntryContext;
+  tenant: (typeof sampleTenants)[number];
+  role: RoleKey;
+  onEvent: (label: string) => void;
+  onBack: () => void;
+  onSave: (label: string) => void;
+}) {
+  const form = getEntryForm(context.screenId);
+  const primaryFields = form.fields.slice(0, Math.ceil(form.fields.length / 2));
+  const secondaryFields = form.fields.slice(Math.ceil(form.fields.length / 2));
+  const modeLabel = context.action === "create" ? "New" : "Edit";
+
+  return (
+    <section className="grid gap-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="grid h-10 w-10 place-items-center rounded-md border border-[#4a4842] bg-[#20201e] text-[#f6f1e8]"
+          aria-label="Back"
+          title="Back"
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <div className="min-w-0">
+          <div className="text-xs font-bold uppercase text-[#d7cfbf]">{modeLabel} entry</div>
+          <div className="truncate text-lg font-bold">{form.label}</div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-[#2fad7e] bg-[#18382d] p-3">
+        <div className="text-xs font-bold uppercase text-[#bce8d5]">Context</div>
+        <div className="mt-1 text-sm font-bold">{tenant.name}</div>
+        <div className="text-xs font-semibold text-[#bce8d5]">Role: {role.replace("_", " ")} · Tenant-scoped save</div>
+      </div>
+
+      <FormSection
+        title="Primary information"
+        fields={primaryFields}
+        mode={context.action}
+        onField={(field) => onEvent(`${form.label}: ${field} ${context.action === "create" ? "entered" : "updated"}`)}
+      />
+      <FormSection
+        title="Operational details"
+        fields={secondaryFields}
+        mode={context.action}
+        offset={primaryFields.length}
+        onField={(field) => onEvent(`${form.label}: ${field} ${context.action === "create" ? "entered" : "updated"}`)}
+      />
+
+      <div className="sticky bottom-0 grid grid-cols-2 gap-2 border-t border-[#3f3d38] bg-[#111110] py-3">
+        <button type="button" onClick={onBack} className="h-11 rounded-md border border-[#4a4842] bg-[#20201e] text-sm font-bold text-[#f6f1e8]">
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(`${form.label} ${context.action === "create" ? "created" : "updated"}`)}
+          className="h-11 rounded-md bg-[#34c084] text-sm font-bold text-white"
+        >
+          {context.action === "create" ? "Save entry" : "Save changes"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function FormSection({
+  title,
+  fields,
+  mode,
+  offset = 0,
+  onField
+}: {
+  title: string;
+  fields: string[];
+  mode: Extract<CrudAction, "create" | "edit">;
+  offset?: number;
+  onField: (field: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
+      <h2 className="mb-3 text-xs font-bold uppercase text-[#d7cfbf]">{title}</h2>
+      <div className="grid gap-2">
+        {fields.map((field, index) => (
+          <label key={field} className="grid gap-1">
+            <span className="text-[11px] font-bold uppercase text-[#cabead]">{field}</span>
+            <button
+              type="button"
+              onClick={() => onField(field)}
+              className="flex min-h-11 items-center justify-between rounded-md border border-[#4a4842] bg-[#20201e] px-3 text-left"
+            >
+              <span className="text-sm font-bold text-[#f6f1e8]">{mode === "create" ? sampleFieldValue(field, index + offset) : `${sampleFieldValue(field, index + offset)} · current`}</span>
+              <span className="rounded-full bg-[#ecf4ff] px-2 py-1 text-xs font-bold text-[#0d5c9d]">{mode === "create" ? "Enter" : "Edit"}</span>
+            </button>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
