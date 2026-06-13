@@ -25,6 +25,8 @@ import type { LucideIcon } from "lucide-react";
 import { sampleTenants } from "@/lib/data/sample-saas-data";
 
 type ScreenId = "dashboard" | "reservations" | "entry" | "kennel" | "checkin" | "care" | "billing" | "reports" | "admin";
+type CrudAction = "create" | "view" | "edit" | "delete";
+type RoleKey = "super_admin" | "manager" | "receptionist";
 
 type Screen = {
   id: ScreenId;
@@ -250,7 +252,7 @@ const screens: Screen[] = [
   }
 ];
 
-const bottomNav: ScreenId[] = ["dashboard", "reservations", "entry", "kennel", "checkin", "care", "billing", "reports", "admin"];
+const bottomNav: ScreenId[] = ["dashboard", "reservations", "kennel", "checkin", "care", "billing", "reports", "admin"];
 
 const entryForms = [
   {
@@ -294,6 +296,11 @@ const entryForms = [
     fields: ["Owner", "Reservation", "Line items", "Discount", "GST", "Payment method", "Receipt"]
   },
   {
+    id: "report",
+    label: "Report config",
+    fields: ["Report type", "Date range", "Tenant", "Group by", "Export format", "Schedule"]
+  },
+  {
     id: "staff",
     label: "Staff shift",
     fields: ["Staff member", "Role", "Shift date", "Start time", "End time", "Assigned tasks"]
@@ -310,10 +317,29 @@ const entryForms = [
   }
 ];
 
+const roleActionPermissions: Record<RoleKey, CrudAction[]> = {
+  super_admin: ["create", "view", "edit", "delete"],
+  manager: ["create", "view", "edit"],
+  receptionist: ["create", "view", "edit"]
+};
+
+const moduleFormByScreen: Record<ScreenId, string> = {
+  dashboard: "care",
+  reservations: "reservation",
+  entry: "reservation",
+  kennel: "kennel",
+  checkin: "checkin",
+  care: "care",
+  billing: "billing",
+  reports: "report",
+  admin: "admin"
+};
+
 export function WireframeExplorer() {
   const [activeId, setActiveId] = useState<ScreenId>("dashboard");
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [tenantId, setTenantId] = useState(sampleTenants[0].id);
+  const [activeRole, setActiveRole] = useState<RoleKey>("super_admin");
   const [eventLog, setEventLog] = useState<string[]>(["Wireframe loaded", "Super admin controls enabled"]);
   const [deviceTime, setDeviceTime] = useState("");
   const active = useMemo(() => screens.find((screen) => screen.id === activeId) ?? screens[0], [activeId]);
@@ -365,19 +391,34 @@ export function WireframeExplorer() {
               </button>
             </div>
             {isLoggedIn ? (
-              <select
-                value={tenantId}
-                onChange={(event) => {
-                  setTenantId(event.target.value);
-                  pushEvent("Tenant context switched");
-                }}
-                className="mt-4 h-9 w-full rounded-md border border-[#4d4b46] bg-[#1f1f1d] px-3 text-sm font-bold text-[#f6f1e8]"
-                aria-label="Tenant"
-              >
-                {sampleTenants.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
+              <div className="mt-4 grid grid-cols-[1fr_120px] gap-2">
+                <select
+                  value={tenantId}
+                  onChange={(event) => {
+                    setTenantId(event.target.value);
+                    pushEvent("Tenant context switched");
+                  }}
+                  className="h-9 min-w-0 rounded-md border border-[#4d4b46] bg-[#1f1f1d] px-3 text-sm font-bold text-[#f6f1e8]"
+                  aria-label="Tenant"
+                >
+                  {sampleTenants.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={activeRole}
+                  onChange={(event) => {
+                    setActiveRole(event.target.value as RoleKey);
+                    pushEvent(`Role switched to ${event.target.value}`);
+                  }}
+                  className="h-9 rounded-md border border-[#4d4b46] bg-[#1f1f1d] px-2 text-xs font-bold text-[#f6f1e8]"
+                  aria-label="Role"
+                >
+                  <option value="super_admin">Super admin</option>
+                  <option value="manager">Manager</option>
+                  <option value="receptionist">Reception</option>
+                </select>
+              </div>
             ) : null}
           </div>
 
@@ -406,7 +447,7 @@ export function WireframeExplorer() {
                   <div className="mt-1 text-xs font-semibold text-[#d7cfbf]">18 of 24 units occupied — 75%</div>
                 </div>
 
-                <ModulePanel active={active} tenant={tenant} onEvent={pushEvent} onNavigate={setActiveId} />
+                <ModulePanel active={active} tenant={tenant} activeRole={activeRole} onEvent={pushEvent} onNavigate={setActiveId} />
 
                 <section className="mt-4">
                   <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Transactions</h2>
@@ -461,26 +502,41 @@ export function WireframeExplorer() {
 function ModulePanel({
   active,
   tenant,
+  activeRole,
   onEvent,
   onNavigate
 }: {
   active: Screen;
   tenant: (typeof sampleTenants)[number];
+  activeRole: RoleKey;
   onEvent: (label: string) => void;
   onNavigate: (screen: ScreenId) => void;
 }) {
+  const [activeAction, setActiveAction] = useState<CrudAction>("view");
+  const allowedActions = roleActionPermissions[activeRole];
+
   if (active.id === "reservations") {
     return (
       <section className="mt-4">
         <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Reservation pipeline</h2>
+        <ModuleActionPanel
+          active={active}
+          action={activeAction}
+          allowedActions={allowedActions}
+          onAction={(nextAction) => {
+            setActiveAction(nextAction);
+            onEvent(`${active.label}: ${nextAction} opened`);
+          }}
+          onEvent={onEvent}
+        />
         <div className="mb-3 rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-bold text-[#d8cfbf]">
           Tenant-scoped bookings for {tenant.name}
         </div>
         <button
           type="button"
           onClick={() => {
-            onEvent("New reservation entry started");
-            onNavigate("entry");
+            setActiveAction("create");
+            onEvent("New reservation form opened");
           }}
           className="mb-3 flex min-h-[58px] w-full items-center gap-3 rounded-lg border border-[#2fad7e] bg-[#18382d] p-3 text-left"
         >
@@ -488,7 +544,7 @@ function ModulePanel({
             <Plus size={18} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-bold">New reservation entry</span>
+            <span className="block font-bold">Create reservation</span>
             <span className="block truncate text-xs font-semibold text-[#bce8d5]">Owner, pet, dates, unit, services, quote</span>
           </span>
           <span className="rounded-full bg-[#ecf4ff] px-2 py-1 text-xs font-bold text-[#0d5c9d]">New</span>
@@ -544,6 +600,16 @@ function ModulePanel({
     return (
       <section className="mt-4">
         <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Interactive kennel map</h2>
+        <ModuleActionPanel
+          active={active}
+          action={activeAction}
+          allowedActions={allowedActions}
+          onAction={(nextAction) => {
+            setActiveAction(nextAction);
+            onEvent(`${active.label}: ${nextAction} opened`);
+          }}
+          onEvent={onEvent}
+        />
         <div className="mb-3 rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-bold text-[#d8cfbf]">
           {tenant.occupancy} occupied · {tenant.region}
         </div>
@@ -574,6 +640,16 @@ function ModulePanel({
     return (
       <section className="mt-4">
         <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Check-in transaction</h2>
+        <ModuleActionPanel
+          active={active}
+          action={activeAction}
+          allowedActions={allowedActions}
+          onAction={(nextAction) => {
+            setActiveAction(nextAction);
+            onEvent(`${active.label}: ${nextAction} opened`);
+          }}
+          onEvent={onEvent}
+        />
         <div className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-4">
           {["Reservation found", "Vaccination verified", "Condition photo attached", "Medication handover", "Staff signature"].map((step, index) => (
             <button key={step} onClick={() => onEvent(`${step} completed`)} className="flex w-full items-center gap-3 border-b border-[#44413b] py-3 last:border-b-0" type="button">
@@ -590,6 +666,16 @@ function ModulePanel({
     return (
       <section className="mt-4">
         <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Daily care board</h2>
+        <ModuleActionPanel
+          active={active}
+          action={activeAction}
+          allowedActions={allowedActions}
+          onAction={(nextAction) => {
+            setActiveAction(nextAction);
+            onEvent(`${active.label}: ${nextAction} opened`);
+          }}
+          onEvent={onEvent}
+        />
         <div className="grid gap-3">
           {["Morning", "Afternoon", "Evening"].map((period) => (
             <div key={period} className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
@@ -613,6 +699,16 @@ function ModulePanel({
     return (
       <section className="mt-4">
         <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Invoice and POS</h2>
+        <ModuleActionPanel
+          active={active}
+          action={activeAction}
+          allowedActions={allowedActions}
+          onAction={(nextAction) => {
+            setActiveAction(nextAction);
+            onEvent(`${active.label}: ${nextAction} opened`);
+          }}
+          onEvent={onEvent}
+        />
         <div className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-4">
           {[
             ["Boarding nights", "₹6,000"],
@@ -636,6 +732,16 @@ function ModulePanel({
     return (
       <section className="mt-4">
         <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Reports dashboard</h2>
+        <ModuleActionPanel
+          active={active}
+          action={activeAction}
+          allowedActions={allowedActions}
+          onAction={(nextAction) => {
+            setActiveAction(nextAction);
+            onEvent(`${active.label}: ${nextAction} opened`);
+          }}
+          onEvent={onEvent}
+        />
         <div className="grid gap-3">
           {["Occupancy", "Revenue", "Staff efficiency"].map((report, index) => (
             <button key={report} onClick={() => onEvent(`${report} CSV exported`)} className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3 text-left" type="button">
@@ -657,6 +763,16 @@ function ModulePanel({
     return (
       <section className="mt-4">
         <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Super admin controls</h2>
+        <ModuleActionPanel
+          active={active}
+          action={activeAction}
+          allowedActions={allowedActions}
+          onAction={(nextAction) => {
+            setActiveAction(nextAction);
+            onEvent(`${active.label}: ${nextAction} opened`);
+          }}
+          onEvent={onEvent}
+        />
         <div className="rounded-lg border border-[#28634d] bg-[#1f342b] p-3 text-sm font-bold text-[#9ce4bf]">admin@example.com has all create, read, update, delete, and manage permissions.</div>
         <div className="mt-3 rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
           <div className="text-xs font-bold uppercase text-[#d7cfbf]">Tenant administration</div>
@@ -676,6 +792,16 @@ function ModulePanel({
 
   return (
     <>
+      <ModuleActionPanel
+        active={active}
+        action={activeAction}
+        allowedActions={allowedActions}
+        onAction={(nextAction) => {
+          setActiveAction(nextAction);
+          onEvent(`${active.label}: ${nextAction} opened`);
+        }}
+        onEvent={onEvent}
+      />
       {active.sections.map((section) => (
         <section key={section.title} className="mt-4">
           <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">{section.title}</h2>
@@ -683,6 +809,97 @@ function ModulePanel({
         </section>
       ))}
     </>
+  );
+}
+
+function ModuleActionPanel({
+  active,
+  action,
+  allowedActions,
+  onAction,
+  onEvent
+}: {
+  active: Screen;
+  action: CrudAction;
+  allowedActions: CrudAction[];
+  onAction: (action: CrudAction) => void;
+  onEvent: (label: string) => void;
+}) {
+  const selectedForm = entryForms.find((form) => form.id === moduleFormByScreen[active.id]) ?? entryForms[0];
+  const actions: CrudAction[] = ["create", "view", "edit", "delete"];
+
+  return (
+    <div className="mb-3 rounded-lg border border-[#46433d] bg-[#242421] p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-bold uppercase text-[#d7cfbf]">Module actions</div>
+          <div className="text-sm font-bold">{selectedForm.label}</div>
+        </div>
+        <span className="rounded-full bg-[#18382d] px-2 py-1 text-[11px] font-bold text-[#9ce4bf]">Permission based</span>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {actions.map((item) => {
+          const allowed = allowedActions.includes(item);
+          return (
+            <button
+              key={item}
+              type="button"
+              disabled={!allowed}
+              onClick={() => onAction(item)}
+              className={`h-10 rounded-md border text-xs font-bold capitalize ${
+                action === item
+                  ? "border-[#34c084] bg-[#34c084] text-white"
+                  : allowed
+                    ? "border-[#4a4842] bg-[#20201e] text-[#f6f1e8]"
+                    : "border-[#36332f] bg-[#191917] text-[#696156]"
+              }`}
+            >
+              {item}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 grid gap-2">
+        {action === "delete" ? (
+          <div className="rounded-md border border-[#774747] bg-[#392727] p-3">
+            <div className="text-sm font-bold text-[#f3b5a9]">Delete confirmation</div>
+            <div className="mt-1 text-xs font-semibold text-[#d9b8ae]">Soft delete keeps audit history and tenant isolation intact.</div>
+            <button
+              type="button"
+              onClick={() => onEvent(`${active.label}: record soft deleted`)}
+              className="mt-3 h-9 w-full rounded-md bg-[#b94747] text-xs font-bold text-white"
+            >
+              Confirm delete
+            </button>
+          </div>
+        ) : (
+          selectedForm.fields.slice(0, action === "view" ? 4 : selectedForm.fields.length).map((field, index) => (
+            <button
+              key={field}
+              type="button"
+              disabled={action === "view"}
+              onClick={() => onEvent(`${active.label}: ${field} ${action === "create" ? "entered" : "edited"}`)}
+              className="flex min-h-10 items-center justify-between rounded-md border border-[#4a4842] bg-[#20201e] px-3 text-left disabled:opacity-90"
+            >
+              <span>
+                <span className="block text-[11px] font-bold uppercase text-[#cabead]">{field}</span>
+                <span className="block text-sm font-bold text-[#f6f1e8]">{sampleFieldValue(field, index)}</span>
+              </span>
+              {action !== "view" ? <span className="rounded-full bg-[#ecf4ff] px-2 py-1 text-xs font-bold text-[#0d5c9d]">Edit</span> : null}
+            </button>
+          ))
+        )}
+      </div>
+      {action === "create" || action === "edit" ? (
+        <button
+          type="button"
+          onClick={() => onEvent(`${active.label}: ${selectedForm.label.toLowerCase()} ${action === "create" ? "created" : "updated"}`)}
+          className="mt-3 h-10 w-full rounded-md bg-[#34c084] text-sm font-bold text-white"
+        >
+          {action === "create" ? "Save new record" : "Save changes"}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
