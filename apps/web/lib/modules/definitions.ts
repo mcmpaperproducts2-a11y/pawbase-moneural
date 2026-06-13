@@ -59,7 +59,7 @@ export const moduleDefinitions: ModuleDefinition[] = [
   {
     id: "owners",
     label: "Owners",
-    href: "/pets",
+    href: "/owners",
     icon: "users",
     summary: "Owner profiles, contacts, notes, emergency information, pets, and payment history inside Pets.",
     primaryAction: "Add owner",

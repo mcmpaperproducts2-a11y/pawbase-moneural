@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { saveLocalOwner } from "@/lib/owners-pets/local";
 import type { Owner } from "@/lib/owners-pets/store";
 
 export function OwnerForm({ owner }: { owner?: Owner | null }) {
@@ -25,7 +26,9 @@ export function OwnerForm({ owner }: { owner?: Owner | null }) {
       return;
     }
     const payload = await response.json();
-    router.push(`/owners/${payload.id ?? payload.data?.id ?? owner?.id}`);
+    const savedOwner = (payload.data ?? payload) as Owner;
+    if (savedOwner?.id) saveLocalOwner(savedOwner);
+    router.push(`/owners/${savedOwner.id ?? owner?.id}`);
     router.refresh();
   }
 

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { loadLocalOwners, mergeOwners } from "@/lib/owners-pets/local";
 import type { Owner, Pet } from "@/lib/owners-pets/store";
 
 const species = ["dog", "cat", "rabbit", "bird", "other"] as const;
@@ -15,7 +16,11 @@ export function PetForm({ pet }: { pet?: Pet | null }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/owners?active=all").then((response) => response.json()).then((payload: { data?: Owner[] }) => setOwners(payload.data ?? []));
+    setOwners(loadLocalOwners());
+    fetch("/api/owners?active=all")
+      .then((response) => response.json())
+      .then((payload: { data?: Owner[] }) => setOwners((current) => mergeOwners(payload.data ?? [], current)))
+      .catch(() => undefined);
   }, []);
 
   function update(key: keyof Pet, value: string | boolean | number) {
