@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -12,13 +11,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-background lg:flex">
-      <Sidebar user={user} />
-      <div className="min-w-0 flex-1 pb-20 lg:pb-0">
+    <div className="min-h-screen bg-[#1b1b1a] text-[#f6f1e8]">
+      <div className="mx-auto min-h-screen max-w-[460px] bg-[#111110] shadow-2xl">
         <TopBar user={user} />
-        <main className="mx-auto w-full max-w-7xl p-4 sm:p-6">{children}</main>
+        <main className="px-4 pb-28 pt-4">{children}</main>
+        <MobileNav user={user} />
       </div>
-      <MobileNav user={user} />
     </div>
   );
 }
