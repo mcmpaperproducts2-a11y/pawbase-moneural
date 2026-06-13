@@ -27,14 +27,26 @@ type DetailState = { record: ModuleRecord; module: ModuleDefinition };
 
 type ModuleRecord = ModuleDefinition["records"][number];
 type ModuleTransaction = ModuleDefinition["transactions"][number];
+type FieldOption = string | { value: string; label: string };
 type FieldDefinition = {
   key: string;
   label: string;
   type?: "text" | "date" | "number" | "email" | "tel" | "select" | "textarea";
   required?: boolean;
-  options?: string[];
+  options?: FieldOption[];
 };
 type DraftRecord = Record<string, string>;
+type RelatedRecords = Record<string, ModuleRecord[]>;
+
+const relationSources: Record<string, string> = {
+  owner_id: "owners",
+  pet_id: "pets",
+  reservation_id: "reservations",
+  kennel_unit_id: "kennel",
+  invoice_id: "billing",
+  inventory_item_id: "inventory",
+  staff_member_id: "staff"
+};
 
 const moduleFieldDefinitions: Record<string, FieldDefinition[]> = {
   reservations: [
@@ -157,8 +169,60 @@ function getModuleFields(moduleId: string) {
   return moduleFieldDefinitions[moduleId] ?? moduleFieldDefinitions.dashboard;
 }
 
+function getOptionValue(option: FieldOption) {
+  return typeof option === "string" ? option : option.value;
+}
+
+function getOptionLabel(option: FieldOption) {
+  return typeof option === "string" ? option : option.label;
+}
+
+function withRelationOptions(fields: FieldDefinition[], relatedRecords: RelatedRecords) {
+  return fields.map((field) => {
+    const sourceModuleId = relationSources[field.key];
+    if (!sourceModuleId) return field;
+    const options = uniqueRecords(relatedRecords[sourceModuleId] ?? []).map((record) => ({ value: record.id, label: record.title }));
+    return { ...field, options };
+  });
+}
+
+function uniqueRecords(records: ModuleRecord[]) {
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    const key = record.id || record.title;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function seedRelatedRecords(activeModule: ModuleDefinition) {
+  return Object.fromEntries(
+    moduleDefinitionsForRelations(activeModule).map((definition) => [definition.id, definition.records])
+  ) as RelatedRecords;
+}
+
+function moduleDefinitionsForRelations(activeModule: ModuleDefinition) {
+  const ids = new Set([...Object.values(relationSources), activeModule.id, "owners"]);
+  return Array.from(ids)
+    .map((id) => getModuleDefinition(id))
+    .filter((definition): definition is ModuleDefinition => Boolean(definition));
+}
+
+function mergeRelatedRecords(current: RelatedRecords, moduleId: string, records: ModuleRecord[]) {
+  return {
+    ...current,
+    [moduleId]: uniqueRecords([...records, ...(current[moduleId] ?? [])])
+  };
+}
+
+function displayFieldValue(field: FieldDefinition, value: string) {
+  if (field.type !== "select") return value;
+  return getOptionLabel(field.options?.find((option) => getOptionValue(option) === value) ?? value);
+}
+
 function getDefaultValue(field: FieldDefinition) {
-  if (field.options?.length) return field.options[0];
+  if (field.options?.length) return getOptionValue(field.options[0]);
   if (field.type === "date") return new Date().toISOString().slice(0, 10);
   if (field.type === "number") return "0";
   return "";
@@ -209,6 +273,9 @@ function getRecordTitle(moduleId: string, draft: DraftRecord, existing?: ModuleR
 
 function getRecordSubtitle(moduleId: string, draft: DraftRecord, existing?: ModuleRecord) {
   if (moduleId === "owners") return [draft.email, draft.phone_primary].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  if (moduleId === "pets" && draft.owner_name) return [draft.species, draft.breed, draft.owner_name].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  if (moduleId === "reservations" && draft.owner_name) return [draft.owner_name, draft.check_in_date, draft.check_out_date].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  if (moduleId === "billing" && draft.owner_name) return [draft.owner_name, draft.status].filter(Boolean).join(" · ") || existing?.subtitle || "";
   if (moduleId === "pets") return [draft.species, draft.breed, draft.owner_id].filter(Boolean).join(" · ") || existing?.subtitle || "";
   if (moduleId === "reservations") return [draft.owner_id, draft.check_in_date, draft.check_out_date].filter(Boolean).join(" · ") || existing?.subtitle || "";
   if (moduleId === "kennel") return [draft.kennel_type_id, draft.status].filter(Boolean).join(" · ") || existing?.subtitle || "";
@@ -224,8 +291,9 @@ function getRecordAmount(moduleId: string, draft: DraftRecord, existing?: Module
 }
 
 export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorkspaceProps) {
+  const ownerModule = getModuleDefinition("owners");
   const [records, setRecords] = useState(module.records);
-  const [relatedOwners, setRelatedOwners] = useState<ModuleRecord[]>([]);
+  const [relatedRecords, setRelatedRecords] = useState<RelatedRecords>(() => seedRelatedRecords(module));
   const [transactions, setTransactions] = useState(module.transactions);
   const [selectedId, setSelectedId] = useState(detailId ?? module.records[0]?.id);
   const [query, setQuery] = useState("");
@@ -239,7 +307,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
   );
   const apiPath = getModuleApiPath(module.id);
   const fields = getModuleFields(module.id);
-  const ownerModule = getModuleDefinition("owners");
+  const relatedOwners = relatedRecords.owners ?? [];
   const selected = useMemo(
     () => records.find((record) => record.id === selectedId) ?? records[0],
     [records, selectedId]
@@ -260,6 +328,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
         if (!active || !payload) return;
         if (payload.records?.length) {
           setRecords(payload.records);
+          setRelatedRecords((current) => mergeRelatedRecords(current, module.id, payload.records ?? []));
           setSelectedId((current) => current || payload.records?.[0]?.id || "");
         }
         if (payload.transactions?.length) {
@@ -274,14 +343,20 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
   }, [apiPath]);
 
   useEffect(() => {
-    if (module.id !== "pets") return;
+    const sourceModuleIds = Array.from(new Set(getModuleFields(module.id).map((field) => relationSources[field.key]).filter(Boolean)));
+    if (!sourceModuleIds.length) return;
     let active = true;
-    fetch("/api/owners")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { records?: ModuleRecord[] } | null) => {
-        if (active && payload?.records) setRelatedOwners(payload.records);
-      })
-      .catch(() => undefined);
+    sourceModuleIds.forEach((sourceModuleId) => {
+      fetch(getModuleApiPath(sourceModuleId))
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload: { records?: ModuleRecord[] } | null) => {
+          const sourceRecords = payload?.records ?? [];
+          if (active && sourceRecords.length) {
+            setRelatedRecords((current) => mergeRelatedRecords(current, sourceModuleId, sourceRecords));
+          }
+        })
+        .catch(() => undefined);
+    });
     return () => {
       active = false;
     };
@@ -303,16 +378,38 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
     pushTransaction(`${detailModule.label}: ${record.title} opened`);
   }
 
+  function enrichDraftWithRelations(targetModule: ModuleDefinition, draft: DraftRecord) {
+    return Object.entries(relationSources).reduce((nextDraft, [fieldKey, sourceModuleId]) => {
+      const value = nextDraft[fieldKey];
+      if (!value) return nextDraft;
+      const record = (relatedRecords[sourceModuleId] ?? []).find((item) => item.id === value || item.title === value);
+      if (!record) return nextDraft;
+      const nameKey = fieldKey.replace(/_id$/, "_name");
+      return { ...nextDraft, [fieldKey]: record.id, [nameKey]: record.title };
+    }, draft);
+  }
+
+  function getDisplaySubtitle(record: ModuleRecord, recordModule = module) {
+    if (!record.data) return record.subtitle;
+    return Object.entries(relationSources).reduce((subtitle, [fieldKey, sourceModuleId]) => {
+      const value = record.data?.[fieldKey];
+      if (!value) return subtitle;
+      const recordName = record.data?.[fieldKey.replace(/_id$/, "_name")];
+      const relatedRecord = (relatedRecords[sourceModuleId] ?? []).find((item) => item.id === value || item.title === value);
+      return subtitle.replace(value, recordName || relatedRecord?.title || value);
+    }, record.subtitle);
+  }
+
   async function saveRecord(draft: DraftRecord) {
     const targetModule = formState?.module ?? module;
+    const relatedDraft = enrichDraftWithRelations(targetModule, draft);
     const targetApiPath = getModuleApiPath(targetModule.id);
     if (formState?.mode === "edit" && formState.record) {
-      const updated = buildRecordFromDraft(targetModule, draft, formState.record);
+      const updated = buildRecordFromDraft(targetModule, relatedDraft, formState.record);
       if (targetModule.id === module.id) {
         setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
-      } else if (targetModule.id === "owners") {
-        setRelatedOwners((current) => current.map((record) => (record.id === updated.id ? updated : record)));
       }
+      setRelatedRecords((current) => mergeRelatedRecords(current, targetModule.id, [updated]));
       setSelectedId(updated.id);
       setDetailState({ module: targetModule, record: updated });
       pushTransaction(`${targetModule.label} record updated`);
@@ -322,14 +419,13 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
       return;
     }
 
-    const draftRecord = buildRecordFromDraft(targetModule, draft);
+    const draftRecord = buildRecordFromDraft(targetModule, relatedDraft);
     const payload = await saveToApi(targetApiPath, "POST", draftRecord);
     const created = payload?.record ?? draftRecord;
     if (targetModule.id === module.id) {
       setRecords((current) => [created, ...current]);
-    } else if (targetModule.id === "owners") {
-      setRelatedOwners((current) => [created, ...current]);
     }
+    setRelatedRecords((current) => mergeRelatedRecords(current, targetModule.id, [created]));
     setSelectedId(created.id);
     setDetailState({ module: targetModule, record: created });
     pushTransaction(`${targetModule.primaryAction} completed`);
@@ -343,7 +439,10 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
       setRecords((current) => current.filter((item) => item.id !== record.id));
       setSelectedId(nextRecord?.id ?? "");
     } else if (targetModule.id === "owners") {
-      setRelatedOwners((current) => current.filter((item) => item.id !== record.id));
+      setRelatedRecords((current) => ({
+        ...current,
+        [targetModule.id]: (current[targetModule.id] ?? []).filter((item) => item.id !== record.id)
+      }));
     }
     setDetailState(null);
     pushTransaction(`${targetModule.label}: ${record.title} deleted`);
@@ -448,7 +547,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate font-bold text-[#f6f1e8]">{record.title}</div>
-                  <div className="mt-1 truncate text-sm font-semibold text-[#b9b0a3]">{record.subtitle}</div>
+                  <div className="mt-1 truncate text-sm font-semibold text-[#b9b0a3]">{getDisplaySubtitle(record)}</div>
                 </div>
                 <span className="shrink-0 rounded-md bg-[#2c2b29] px-2 py-1 text-xs font-bold text-[#d7cfbf]">{record.status}</span>
               </div>
@@ -485,7 +584,8 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
         <DetailSheet
           record={detailState.record}
           module={detailState.module}
-          fields={getModuleFields(detailState.module.id)}
+          fields={withRelationOptions(getModuleFields(detailState.module.id), relatedRecords)}
+          subtitle={getDisplaySubtitle(detailState.record, detailState.module)}
           onClose={() => setDetailState(null)}
           onEdit={() => setFormState({ mode: "edit", record: detailState.record, module: detailState.module })}
           onDelete={() => deleteSelected(detailState.record, detailState.module)}
@@ -494,7 +594,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
             if (detailState.module.id === module.id) {
               setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
             } else if (detailState.module.id === "owners") {
-              setRelatedOwners((current) => current.map((record) => (record.id === updated.id ? updated : record)));
+              setRelatedRecords((current) => mergeRelatedRecords(current, detailState.module.id, [updated]));
             }
             setDetailState({ module: detailState.module, record: updated });
             pushTransaction(`${detailState.record.title} marked ${status}`);
@@ -508,7 +608,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
       {formState ? (
         <RecordFormSheet
           module={formState.module ?? module}
-          fields={getModuleFields((formState.module ?? module).id)}
+          fields={withRelationOptions(getModuleFields((formState.module ?? module).id), relatedRecords)}
           state={formState}
           onClose={() => setFormState(null)}
           onSave={saveRecord}
@@ -577,6 +677,7 @@ function DetailSheet({
   module,
   record,
   fields,
+  subtitle,
   onClose,
   onEdit,
   onDelete,
@@ -585,6 +686,7 @@ function DetailSheet({
   module: ModuleDefinition;
   record: ModuleRecord;
   fields: FieldDefinition[];
+  subtitle?: string;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -598,7 +700,7 @@ function DetailSheet({
           <div className="min-w-0">
             <div className="text-xs font-bold uppercase text-[#34c084]">{module.label} detail</div>
             <h2 className="mt-1 text-xl font-bold text-[#f6f1e8]">{record.title}</h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-[#b9b0a3]">{record.subtitle}</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-[#b9b0a3]">{subtitle ?? record.subtitle}</p>
           </div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#151514] text-[#b9b0a3]" aria-label="Close">
             <X size={18} />
@@ -615,7 +717,7 @@ function DetailSheet({
             return value ? (
               <div key={field.key} className="rounded-md border border-[#4a4842] bg-[#151514] p-3">
                 <div className="text-[11px] font-bold uppercase text-[#b9b0a3]">{field.label}</div>
-                <div className="mt-1 text-sm font-semibold text-[#f6f1e8]">{value}</div>
+                <div className="mt-1 text-sm font-semibold text-[#f6f1e8]">{displayFieldValue(field, value)}</div>
               </div>
             ) : null;
           })}
@@ -737,8 +839,9 @@ function Field({
           required={field.required}
           className="h-11 rounded-md border border-[#4a4842] bg-[#151514] px-3 text-sm normal-case text-[#f6f1e8] outline-none"
         >
+          {!field.options?.length ? <option value="">No {field.label.toLowerCase()} records available</option> : null}
           {field.options?.map((option) => (
-            <option key={option} value={option}>{option}</option>
+            <option key={getOptionValue(option)} value={getOptionValue(option)}>{getOptionLabel(option)}</option>
           ))}
         </select>
       </label>
