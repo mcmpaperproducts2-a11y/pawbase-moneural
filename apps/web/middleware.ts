@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth/jwt";
+import { accessCookieName, legacyAccessCookieName } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/permissions/checker";
 
 const protectedPrefixes = [
@@ -41,7 +42,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get("pawbase_access")?.value;
+  const token = request.cookies.get(accessCookieName)?.value ?? request.cookies.get(legacyAccessCookieName)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
   if (!session) {

@@ -1,6 +1,5 @@
-import { ModuleWorkspace } from "@/components/modules/ModuleWorkspace";
-import { getModuleDefinition, moduleDefinitions } from "@/lib/modules/definitions";
+import { AdminUsersClient } from "@/components/admin/AdminUsersClient";
 
 export default function AdminUsersPage() {
-  return <ModuleWorkspace module={getModuleDefinition("admin") ?? moduleDefinitions[0]} />;
+  return <AdminUsersClient />;
 }

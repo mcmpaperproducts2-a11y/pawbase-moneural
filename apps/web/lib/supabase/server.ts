@@ -19,3 +19,5 @@ export function createServerSupabaseClient() {
     }
   });
 }
+
+export const createServerClient = createServerSupabaseClient;

@@ -1,6 +1,5 @@
-import { ModuleWorkspace } from "@/components/modules/ModuleWorkspace";
-import { getModuleDefinition, moduleDefinitions } from "@/lib/modules/definitions";
+import { redirect } from "next/navigation";
 
 export default function NewAdminUserPage() {
-  return <ModuleWorkspace module={getModuleDefinition("admin") ?? moduleDefinitions[0]} mode="new" />;
+  redirect("/admin/users");
 }

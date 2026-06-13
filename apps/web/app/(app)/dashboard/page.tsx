@@ -1,7 +1,7 @@
-import { ModuleWorkspace } from "@/components/modules/ModuleWorkspace";
-import { getModuleDefinition, moduleDefinitions } from "@/lib/modules/definitions";
+import { DashboardClient } from "@/app/(app)/dashboard/DashboardClient";
+import { getDashboardData } from "@/lib/dashboard/data";
 
-export default function DashboardPage() {
-  const module = getModuleDefinition("dashboard") ?? moduleDefinitions[0];
-  return <ModuleWorkspace module={module} />;
+export default async function DashboardPage() {
+  const initialData = await getDashboardData();
+  return <DashboardClient initialData={initialData} />;
 }

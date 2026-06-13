@@ -1,6 +1,13 @@
-import { ModuleWorkspace } from "@/components/modules/ModuleWorkspace";
-import { getModuleDefinition, moduleDefinitions } from "@/lib/modules/definitions";
+import { AuditTable } from "@/components/admin/AuditTable";
 
 export default function AdminAuditPage() {
-  return <ModuleWorkspace module={getModuleDefinition("admin") ?? moduleDefinitions[0]} mode="calendar" />;
+  return (
+    <div className="grid gap-4">
+      <div>
+        <h1 className="text-2xl font-bold">Audit log</h1>
+        <p className="mt-1 text-sm text-[#b9b0a3]">Review user, role, permission, and data changes.</p>
+      </div>
+      <AuditTable />
+    </div>
+  );
 }

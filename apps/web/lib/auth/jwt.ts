@@ -15,6 +15,18 @@ export async function signSessionToken(user: AuthUser) {
     .sign(getJwtSecret());
 }
 
+export async function signAccessToken(user: AuthUser) {
+  return signSessionToken(user);
+}
+
+export async function signRefreshToken(userId: string) {
+  return new SignJWT({ sub: userId, typ: "refresh" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("30d")
+    .sign(getJwtSecret());
+}
+
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
@@ -29,4 +41,20 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
   } catch {
     return null;
   }
+}
+
+export async function verifyAccessToken(token: string) {
+  const session = await verifySessionToken(token);
+  if (!session) {
+    throw new Error("invalid_access_token");
+  }
+  return session;
+}
+
+export async function verifyRefreshToken(token: string) {
+  const { payload } = await jwtVerify(token, getJwtSecret());
+  if (payload.typ !== "refresh" || !payload.sub) {
+    throw new Error("invalid_refresh_token");
+  }
+  return { sub: String(payload.sub), exp: typeof payload.exp === "number" ? payload.exp : 0 };
 }

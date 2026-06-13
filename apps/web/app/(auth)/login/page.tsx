@@ -1,7 +1,12 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { getCurrentUser } from "@/lib/auth/session";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const user = await getCurrentUser();
+  if (user) redirect("/dashboard");
+
   return (
     <main className="grid min-h-screen place-items-center px-4 py-10">
       <section className="w-full max-w-md rounded-md border border-border bg-white p-6 shadow-sm">

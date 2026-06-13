@@ -14,6 +14,10 @@ type UserRow = {
   password_hash: string;
 };
 
+type RoleRow = {
+  roles?: { name?: UserRole | null } | null;
+};
+
 type AuthUserWithHash = AuthUser & {
   passwordHash: string;
   tenantId?: string | null;
@@ -65,7 +69,14 @@ export async function findLoginUser(email: string): Promise<AuthUserWithHash | n
       .maybeSingle<UserRow>();
 
     if (!error && data) {
-      return mapUserRow(data);
+      const user = mapUserRow(data);
+      const { data: roleRows } = await supabase
+        .from("user_roles")
+        .select("roles(name)")
+        .eq("user_id", user.id)
+        .returns<RoleRow[]>();
+      const role = roleRows?.map((row) => row.roles?.name).find(Boolean);
+      return role ? { ...user, role, permissions: permissionsForRole(role) } : user;
     }
   }
 
