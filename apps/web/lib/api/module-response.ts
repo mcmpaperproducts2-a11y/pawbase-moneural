@@ -38,7 +38,7 @@ function pushTransaction(store: ModuleStore, moduleId: string, label: string) {
 
 async function readBody(request?: Request) {
   if (!request) return {};
-  return (await request.json().catch(() => ({}))) as Partial<ModuleRecord> & { id?: string };
+  return (await request.json().catch(() => ({}))) as Partial<ModuleRecord> & { id?: string; data?: Record<string, string> };
 }
 
 export function listModuleRecords(moduleId: string) {
@@ -62,7 +62,8 @@ export async function createModuleRecord(moduleId: string, request?: Request) {
     title: body.title || `${module.label} record ${store.records.length + 1}`,
     subtitle: body.subtitle || "Created through API",
     status: body.status || "new",
-    amount: body.amount
+    amount: body.amount,
+    data: body.data
   };
   store.records = [record, ...store.records];
   pushTransaction(store, moduleId, `${record.title} created`);
@@ -99,7 +100,8 @@ export async function updateModuleRecord(moduleId: string, request: Request) {
     title: body.title ?? existing.title,
     subtitle: body.subtitle ?? existing.subtitle,
     status: body.status ?? existing.status,
-    amount: body.amount ?? existing.amount
+    amount: body.amount ?? existing.amount,
+    data: body.data ?? existing.data
   };
   store.records = store.records.map((record) => (record.id === updated.id ? updated : record));
   pushTransaction(store, moduleId, `${updated.title} updated`);

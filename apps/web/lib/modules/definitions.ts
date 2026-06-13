@@ -11,6 +11,7 @@ export type ModuleDefinition = {
     subtitle: string;
     status: string;
     amount?: string;
+    data?: Record<string, string>;
   }>;
   transactions: Array<{
     id: string;

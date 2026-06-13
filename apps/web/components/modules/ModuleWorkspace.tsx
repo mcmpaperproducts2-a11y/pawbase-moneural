@@ -25,25 +25,201 @@ type ModuleWorkspaceProps = {
 
 type ModuleRecord = ModuleDefinition["records"][number];
 type ModuleTransaction = ModuleDefinition["transactions"][number];
-type DraftRecord = {
-  title: string;
-  subtitle: string;
-  status: string;
-  amount: string;
-  owner: string;
-  date: string;
-  notes: string;
+type FieldDefinition = {
+  key: string;
+  label: string;
+  type?: "text" | "date" | "number" | "email" | "tel" | "select" | "textarea";
+  required?: boolean;
+  options?: string[];
+};
+type DraftRecord = Record<string, string>;
+
+const moduleFieldDefinitions: Record<string, FieldDefinition[]> = {
+  reservations: [
+    { key: "tenant_id", label: "Tenant", required: true, options: ["PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "owner_id", label: "Owner", required: true, options: ["Asha Rao", "Kabir Menon", "Neha Shah"], type: "select" },
+    { key: "pet_id", label: "Pet", required: true, options: ["Bruno", "Rio", "Mochi"], type: "select" },
+    { key: "kennel_unit_id", label: "Kennel unit", options: ["Garden Suite 04", "Cat Condo 02", "Deluxe 11"], type: "select" },
+    { key: "status", label: "Status", required: true, options: ["inquiry", "confirmed", "checked_in", "completed", "cancelled", "no_show"], type: "select" },
+    { key: "check_in_date", label: "Check-in date", required: true, type: "date" },
+    { key: "check_out_date", label: "Check-out date", required: true, type: "date" },
+    { key: "total_amount", label: "Total amount", type: "number" },
+    { key: "notes", label: "Reservation notes", type: "textarea" }
+  ],
+  owners: [
+    { key: "tenant_id", label: "Tenant", required: true, options: ["PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "first_name", label: "First name", required: true },
+    { key: "last_name", label: "Last name", required: true },
+    { key: "email", label: "Email", type: "email" },
+    { key: "phone_primary", label: "Primary phone", required: true, type: "tel" },
+    { key: "phone_secondary", label: "Secondary phone", type: "tel" },
+    { key: "address_line1", label: "Address line 1" },
+    { key: "address_line2", label: "Address line 2" },
+    { key: "city", label: "City" },
+    { key: "state", label: "State" },
+    { key: "postal_code", label: "Postal code" },
+    { key: "emergency_contact_name", label: "Emergency contact name" },
+    { key: "emergency_contact_phone", label: "Emergency contact phone", type: "tel" },
+    { key: "notes", label: "Owner notes", type: "textarea" }
+  ],
+  pets: [
+    { key: "tenant_id", label: "Tenant", required: true, options: ["PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "owner_id", label: "Owner", required: true, options: ["Asha Rao", "Kabir Menon", "Neha Shah"], type: "select" },
+    { key: "name", label: "Pet name", required: true },
+    { key: "species", label: "Species", required: true, options: ["dog", "cat", "other"], type: "select" },
+    { key: "breed", label: "Breed" },
+    { key: "temperament", label: "Temperament", options: ["social", "playful", "quiet", "anxious", "special handling"], type: "select" },
+    { key: "feeding_notes", label: "Feeding notes", type: "textarea" }
+  ],
+  kennel: [
+    { key: "tenant_id", label: "Tenant", required: true, options: ["PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "unit_number", label: "Unit number", required: true },
+    { key: "kennel_type_id", label: "Kennel type", required: true, options: ["Garden Suite", "Cat Condo", "Mumbai Deluxe"], type: "select" },
+    { key: "status", label: "Unit status", required: true, options: ["available", "occupied", "reserved", "cleaning", "maintenance"], type: "select" },
+    { key: "base_rate", label: "Base rate", type: "number" },
+    { key: "capacity", label: "Capacity", type: "number" },
+    { key: "maintenance_notes", label: "Maintenance notes", type: "textarea" }
+  ],
+  checkin: [
+    { key: "reservation_id", label: "Reservation", required: true, options: ["Bailey boarding stay", "Milo weekend care", "Rio arrival"], type: "select" },
+    { key: "workflow_type", label: "Workflow", required: true, options: ["check_in", "check_out"], type: "select" },
+    { key: "status", label: "Status", required: true, options: ["ready", "in_progress", "completed", "payment_due", "attention"], type: "select" },
+    { key: "condition_notes", label: "Condition notes", type: "textarea" },
+    { key: "vaccination_verified", label: "Vaccination verified", options: ["yes", "no"], type: "select" },
+    { key: "medication_handover", label: "Medication handover" },
+    { key: "staff_signature", label: "Staff signature", required: true }
+  ],
+  care: [
+    { key: "reservation_id", label: "Reservation", required: true, options: ["Bailey boarding stay", "Milo weekend care", "Rio arrival"], type: "select" },
+    { key: "pet_id", label: "Pet", required: true, options: ["Bruno", "Rio", "Mochi"], type: "select" },
+    { key: "care_date", label: "Care date", required: true, type: "date" },
+    { key: "feeding", label: "Feeding", options: ["not_started", "completed", "skipped", "exception"], type: "select" },
+    { key: "medication", label: "Medication", options: ["none", "due", "administered", "missed"], type: "select" },
+    { key: "exercise", label: "Exercise", options: ["not_started", "yard", "walk", "play_group", "complete"], type: "select" },
+    { key: "mood", label: "Mood", options: ["happy", "calm", "anxious", "tired", "watch"], type: "select" },
+    { key: "notes", label: "Care notes", type: "textarea" }
+  ],
+  billing: [
+    { key: "tenant_id", label: "Tenant", required: true, options: ["PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "reservation_id", label: "Reservation", options: ["Bailey boarding stay", "Milo weekend care", "Rio arrival"], type: "select" },
+    { key: "owner_id", label: "Owner", required: true, options: ["Asha Rao", "Kabir Menon", "Neha Shah"], type: "select" },
+    { key: "invoice_number", label: "Invoice number", required: true },
+    { key: "status", label: "Invoice status", required: true, options: ["draft", "issued", "paid", "overdue", "void"], type: "select" },
+    { key: "subtotal", label: "Subtotal", type: "number" },
+    { key: "tax_amount", label: "Tax amount", type: "number" },
+    { key: "total_amount", label: "Total amount", type: "number" },
+    { key: "payment_method", label: "Payment method", options: ["cash", "upi", "card", "razorpay", "bank_transfer"], type: "select" }
+  ],
+  inventory: [
+    { key: "tenant_id", label: "Tenant", required: true, options: ["PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "name", label: "Item name", required: true },
+    { key: "category", label: "Category", options: ["food", "medicine", "cleaning", "retail", "other"], type: "select" },
+    { key: "quantity_on_hand", label: "Quantity on hand", required: true, type: "number" },
+    { key: "reorder_level", label: "Reorder level", type: "number" },
+    { key: "unit_cost", label: "Unit cost", type: "number" },
+    { key: "supplier", label: "Supplier" }
+  ],
+  reports: [
+    { key: "report_type", label: "Report type", required: true, options: ["occupancy", "revenue", "customers", "staff_efficiency", "inventory"], type: "select" },
+    { key: "date_from", label: "Date from", required: true, type: "date" },
+    { key: "date_to", label: "Date to", required: true, type: "date" },
+    { key: "tenant_id", label: "Tenant", options: ["All tenants", "PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "group_by", label: "Group by", options: ["day", "week", "month", "service", "tenant"], type: "select" },
+    { key: "export_format", label: "Export format", options: ["csv", "xlsx", "pdf"], type: "select" }
+  ],
+  staff: [
+    { key: "tenant_id", label: "Tenant", required: true, options: ["PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "staff_name", label: "Staff member", required: true },
+    { key: "role", label: "Role", required: true, options: ["manager", "receptionist", "vet_staff", "groomer"], type: "select" },
+    { key: "shift_date", label: "Shift date", type: "date" },
+    { key: "start_time", label: "Start time" },
+    { key: "end_time", label: "End time" },
+    { key: "assigned_tasks", label: "Assigned tasks", type: "textarea" }
+  ],
+  admin: [
+    { key: "tenant_id", label: "Tenant", options: ["Global", "PawBase Bengaluru", "PawBase Mumbai", "PawBase Delhi"], type: "select" },
+    { key: "email", label: "Email", required: true, type: "email" },
+    { key: "full_name", label: "Full name", required: true },
+    { key: "role", label: "Role", required: true, options: ["super_admin", "manager", "receptionist", "vet_staff", "groomer"], type: "select" },
+    { key: "is_active", label: "Active", options: ["true", "false"], type: "select" },
+    { key: "module_permissions", label: "Module permissions", type: "textarea" }
+  ],
+  dashboard: [
+    { key: "metric_name", label: "Metric name", required: true },
+    { key: "metric_value", label: "Metric value", required: true },
+    { key: "status", label: "Status", options: ["normal", "attention", "critical"], type: "select" }
+  ]
 };
 
-const blankDraft: DraftRecord = {
-  title: "",
-  subtitle: "",
-  status: "active",
-  amount: "",
-  owner: "",
-  date: "",
-  notes: ""
-};
+function getModuleFields(moduleId: string) {
+  return moduleFieldDefinitions[moduleId] ?? moduleFieldDefinitions.dashboard;
+}
+
+function getDefaultValue(field: FieldDefinition) {
+  if (field.options?.length) return field.options[0];
+  if (field.type === "date") return new Date().toISOString().slice(0, 10);
+  if (field.type === "number") return "0";
+  return "";
+}
+
+function recordToDraft(record: ModuleRecord | undefined, fields: FieldDefinition[]) {
+  const draft: DraftRecord = {};
+  for (const field of fields) {
+    draft[field.key] = record?.data?.[field.key] ?? inferRecordValue(record, field.key) ?? getDefaultValue(field);
+  }
+  return draft;
+}
+
+function inferRecordValue(record: ModuleRecord | undefined, key: string) {
+  if (!record) return "";
+  if (key === "status") return record.status;
+  if (key === "total_amount" || key === "amount" || key === "subtotal") return record.amount?.replace(/[^\d.]/g, "") ?? "";
+  if (key === "notes") return record.subtitle;
+  return "";
+}
+
+function buildRecordFromDraft(module: ModuleDefinition, draft: DraftRecord, existing?: ModuleRecord): ModuleRecord {
+  const title = getRecordTitle(module.id, draft, existing);
+  const subtitle = getRecordSubtitle(module.id, draft, existing);
+  const status = draft.status || draft.is_active || existing?.status || "active";
+  const amount = getRecordAmount(module.id, draft, existing);
+
+  return {
+    id: existing?.id ?? `${module.id}-${Date.now()}`,
+    title,
+    subtitle,
+    status,
+    amount,
+    data: draft
+  };
+}
+
+function getRecordTitle(moduleId: string, draft: DraftRecord, existing?: ModuleRecord) {
+  if (moduleId === "owners") return `${draft.first_name ?? ""} ${draft.last_name ?? ""}`.trim() || existing?.title || "Owner";
+  if (moduleId === "pets") return draft.name || existing?.title || "Pet";
+  if (moduleId === "kennel") return draft.unit_number || draft.kennel_type_id || existing?.title || "Kennel unit";
+  if (moduleId === "reservations") return `${draft.pet_id || "Pet"} reservation`;
+  if (moduleId === "billing") return draft.invoice_number || existing?.title || "Invoice";
+  if (moduleId === "inventory") return draft.name || existing?.title || "Inventory item";
+  if (moduleId === "admin") return draft.full_name || draft.email || existing?.title || "User";
+  return existing?.title || draft.title || `${moduleId} record`;
+}
+
+function getRecordSubtitle(moduleId: string, draft: DraftRecord, existing?: ModuleRecord) {
+  if (moduleId === "owners") return [draft.email, draft.phone_primary].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  if (moduleId === "pets") return [draft.species, draft.breed, draft.owner_id].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  if (moduleId === "reservations") return [draft.owner_id, draft.check_in_date, draft.check_out_date].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  if (moduleId === "kennel") return [draft.kennel_type_id, draft.status].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  if (moduleId === "billing") return [draft.owner_id, draft.status].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  if (moduleId === "admin") return [draft.email, draft.role].filter(Boolean).join(" · ") || existing?.subtitle || "";
+  return draft.notes || existing?.subtitle || "Created from PawBase";
+}
+
+function getRecordAmount(moduleId: string, draft: DraftRecord, existing?: ModuleRecord) {
+  const value = draft.total_amount || draft.amount || draft.subtotal;
+  if (!value) return existing?.amount;
+  return moduleId === "billing" || moduleId === "reservations" ? `₹${value}` : value;
+}
 
 export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorkspaceProps) {
   const [records, setRecords] = useState(module.records);
@@ -57,6 +233,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
     mode === "new" ? { mode: "create" } : null
   );
   const apiPath = getModuleApiPath(module.id);
+  const fields = getModuleFields(module.id);
   const selected = useMemo(
     () => records.find((record) => record.id === selectedId) ?? records[0],
     [records, selectedId]
@@ -65,7 +242,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
     const term = query.trim().toLowerCase();
     if (!term) return records;
     return records.filter((record) =>
-      [record.title, record.subtitle, record.status, record.amount ?? ""].join(" ").toLowerCase().includes(term)
+      [record.title, record.subtitle, record.status, record.amount ?? "", ...Object.values(record.data ?? {})].join(" ").toLowerCase().includes(term)
     );
   }, [records, query]);
 
@@ -108,13 +285,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
 
   async function saveRecord(draft: DraftRecord) {
     if (formState?.mode === "edit" && formState.record) {
-      const updated = {
-        ...formState.record,
-        title: draft.title,
-        subtitle: draft.subtitle,
-        status: draft.status,
-        amount: draft.amount || undefined
-      };
+      const updated = buildRecordFromDraft(module, draft, formState.record);
       setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
       setSelectedId(updated.id);
       setDetailRecord(updated);
@@ -125,13 +296,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
       return;
     }
 
-    const draftRecord: ModuleRecord = {
-      id: `${module.id}-${Date.now()}`,
-      title: draft.title || `${module.label} record ${records.length + 1}`,
-      subtitle: draft.subtitle || "Created from PawBase",
-      status: draft.status || "new",
-      amount: draft.amount || undefined
-    };
+    const draftRecord = buildRecordFromDraft(module, draft);
     const payload = await saveToApi(apiPath, "POST", draftRecord);
     const created = payload?.record ?? draftRecord;
     setRecords((current) => [created, ...current]);
@@ -248,11 +413,12 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
         <DetailSheet
           record={detailRecord}
           module={module}
+          fields={fields}
           onClose={() => setDetailRecord(null)}
           onEdit={() => setFormState({ mode: "edit", record: detailRecord })}
           onDelete={() => deleteSelected(detailRecord)}
           onStatus={(status) => {
-            const updated = { ...detailRecord, status };
+            const updated = { ...detailRecord, status, data: { ...(detailRecord.data ?? {}), status } };
             setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
             setDetailRecord(updated);
             pushTransaction(`${detailRecord.title} marked ${status}`);
@@ -266,6 +432,7 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
       {formState ? (
         <RecordFormSheet
           module={module}
+          fields={fields}
           state={formState}
           onClose={() => setFormState(null)}
           onSave={saveRecord}
@@ -333,6 +500,7 @@ function FlowBoard({ module, records, onOpen }: { module: ModuleDefinition; reco
 function DetailSheet({
   module,
   record,
+  fields,
   onClose,
   onEdit,
   onDelete,
@@ -340,6 +508,7 @@ function DetailSheet({
 }: {
   module: ModuleDefinition;
   record: ModuleRecord;
+  fields: FieldDefinition[];
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -363,6 +532,17 @@ function DetailSheet({
           <div className="text-xs font-bold uppercase text-[#b9b0a3]">Status</div>
           <div className="mt-1 font-bold text-[#f6f1e8]">{record.status}</div>
           {record.amount ? <div className="mt-2 text-sm font-bold text-[#60c94d]">{record.amount}</div> : null}
+        </div>
+        <div className="mt-3 grid gap-2">
+          {fields.map((field) => {
+            const value = record.data?.[field.key] ?? inferRecordValue(record, field.key);
+            return value ? (
+              <div key={field.key} className="rounded-md border border-[#4a4842] bg-[#151514] p-3">
+                <div className="text-[11px] font-bold uppercase text-[#b9b0a3]">{field.label}</div>
+                <div className="mt-1 text-sm font-semibold text-[#f6f1e8]">{value}</div>
+              </div>
+            ) : null;
+          })}
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2">
           {["active", "complete", "cancelled"].map((status) => (
@@ -388,27 +568,20 @@ function DetailSheet({
 
 function RecordFormSheet({
   module,
+  fields,
   state,
   onClose,
   onSave
 }: {
   module: ModuleDefinition;
+  fields: FieldDefinition[];
   state: { mode: "create" | "edit"; record?: ModuleRecord };
   onClose: () => void;
   onSave: (draft: DraftRecord) => void;
 }) {
-  const [draft, setDraft] = useState<DraftRecord>({
-    ...blankDraft,
-    title: state.record?.title ?? "",
-    subtitle: state.record?.subtitle ?? "",
-    status: state.record?.status ?? "active",
-    amount: state.record?.amount ?? "",
-    owner: sampleOwner(module.id),
-    date: new Date().toISOString().slice(0, 10),
-    notes: ""
-  });
+  const [draft, setDraft] = useState<DraftRecord>(() => recordToDraft(state.record, fields));
 
-  function update(field: keyof DraftRecord, value: string) {
+  function update(field: string, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
   }
 
@@ -433,24 +606,14 @@ function RecordFormSheet({
           </button>
         </div>
         <div className="grid gap-3">
-          <Field label="Title" value={draft.title} onChange={(value) => update("title", value)} required />
-          <Field label="Details" value={draft.subtitle} onChange={(value) => update("subtitle", value)} required />
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Status" value={draft.status} onChange={(value) => update("status", value)} />
-            <Field label="Amount" value={draft.amount} onChange={(value) => update("amount", value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Owner / staff" value={draft.owner} onChange={(value) => update("owner", value)} />
-            <Field label="Date" value={draft.date} onChange={(value) => update("date", value)} type="date" />
-          </div>
-          <label className="grid gap-1 text-xs font-bold uppercase text-[#b9b0a3]">
-            Notes
-            <textarea
-              value={draft.notes}
-              onChange={(event) => update("notes", event.target.value)}
-              className="min-h-20 rounded-md border border-[#4a4842] bg-[#151514] px-3 py-2 text-sm normal-case text-[#f6f1e8] outline-none"
+          {fields.map((field) => (
+            <Field
+              key={field.key}
+              field={field}
+              value={draft[field.key] ?? ""}
+              onChange={(value) => update(field.key, value)}
             />
-          </label>
+          ))}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button type="button" onClick={onClose} className="h-11 rounded-md border border-[#4a4842] bg-[#151514] font-bold text-[#f6f1e8]">
@@ -466,35 +629,56 @@ function RecordFormSheet({
 }
 
 function Field({
-  label,
+  field,
   value,
-  onChange,
-  type = "text",
-  required = false
+  onChange
 }: {
-  label: string;
+  field: FieldDefinition;
   value: string;
   onChange: (value: string) => void;
-  type?: string;
-  required?: boolean;
 }) {
+  if (field.type === "textarea") {
+    return (
+      <label className="grid gap-1 text-xs font-bold uppercase text-[#b9b0a3]">
+        {field.label}
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required={field.required}
+          className="min-h-20 rounded-md border border-[#4a4842] bg-[#151514] px-3 py-2 text-sm normal-case text-[#f6f1e8] outline-none"
+        />
+      </label>
+    );
+  }
+
+  if (field.type === "select") {
+    return (
+      <label className="grid gap-1 text-xs font-bold uppercase text-[#b9b0a3]">
+        {field.label}
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required={field.required}
+          className="h-11 rounded-md border border-[#4a4842] bg-[#151514] px-3 text-sm normal-case text-[#f6f1e8] outline-none"
+        >
+          {field.options?.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
   return (
     <label className="grid gap-1 text-xs font-bold uppercase text-[#b9b0a3]">
-      {label}
+      {field.label}
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        type={type}
-        required={required}
+        type={field.type ?? "text"}
+        required={field.required}
         className="h-11 rounded-md border border-[#4a4842] bg-[#151514] px-3 text-sm normal-case text-[#f6f1e8] outline-none"
       />
     </label>
   );
-}
-
-function sampleOwner(moduleId: string) {
-  if (moduleId === "admin") return "PawBase Super Admin";
-  if (moduleId === "staff") return "Priya Nair";
-  if (moduleId === "inventory") return "Pet Supply Co";
-  return "Asha Rao";
 }
