@@ -11,8 +11,11 @@ import {
   HeartPulse,
   Home,
   LockKeyhole,
+  LogIn,
+  LogOut,
   Map,
   PawPrint,
+  Plus,
   Settings,
   ShieldCheck,
   TrendingUp,
@@ -21,7 +24,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { sampleTenants } from "@/lib/data/sample-saas-data";
 
-type ScreenId = "dashboard" | "reservations" | "kennel" | "checkin" | "care" | "billing" | "reports" | "admin";
+type ScreenId = "dashboard" | "reservations" | "entry" | "kennel" | "checkin" | "care" | "billing" | "reports" | "admin";
 
 type Screen = {
   id: ScreenId;
@@ -88,6 +91,28 @@ const screens: Screen[] = [
         items: [
           { badge: "+", title: "Create booking", meta: "Pick owner, pet, dates, unit, add-ons", chip: "New" },
           { badge: "W", title: "Promote waitlist", meta: "Garden Suite opens tomorrow", chip: "Open" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "entry",
+    label: "Entry",
+    title: "New reservation entry",
+    icon: Plus,
+    stats: [
+      { label: "Owner", value: "Select" },
+      { label: "Pet", value: "Select" },
+      { label: "Quote", value: "₹0" },
+      { label: "Status", value: "Draft", tone: "amber" }
+    ],
+    sections: [
+      {
+        title: "Reservation entry",
+        items: [
+          { badge: "1", title: "Owner and pet", meta: "Search existing owner or add a new profile", chip: "Open" },
+          { badge: "2", title: "Dates and unit", meta: "Choose check-in, check-out, kennel type, unit", chip: "Open" },
+          { badge: "3", title: "Services and quote", meta: "Add grooming, meals, transport, discounts", chip: "Open" }
         ]
       }
     ]
@@ -225,10 +250,69 @@ const screens: Screen[] = [
   }
 ];
 
-const bottomNav: ScreenId[] = ["dashboard", "reservations", "kennel", "checkin", "care", "billing", "reports", "admin"];
+const bottomNav: ScreenId[] = ["dashboard", "reservations", "entry", "kennel", "checkin", "care", "billing", "reports", "admin"];
+
+const entryForms = [
+  {
+    id: "reservation",
+    label: "Reservation",
+    fields: ["Owner", "Pet", "Check-in", "Check-out", "Kennel unit", "Services", "Quote", "Deposit"]
+  },
+  {
+    id: "owner",
+    label: "Owner",
+    fields: ["Name", "Email", "Primary phone", "Address", "Emergency contact", "Notes"]
+  },
+  {
+    id: "pet",
+    label: "Pet",
+    fields: ["Owner", "Name", "Species", "Breed", "Weight", "Temperament", "Vaccinations", "Feeding notes"]
+  },
+  {
+    id: "kennel",
+    label: "Kennel",
+    fields: ["Unit number", "Type", "Capacity", "Rate", "Status", "Maintenance notes"]
+  },
+  {
+    id: "checkin",
+    label: "Check-in/out",
+    fields: ["Reservation", "Condition notes", "Photo", "Documents", "Medication handover", "Staff signature"]
+  },
+  {
+    id: "care",
+    label: "Care log",
+    fields: ["Pet", "Feeding", "Medication", "Exercise", "Mood", "Care notes"]
+  },
+  {
+    id: "incident",
+    label: "Incident",
+    fields: ["Pet", "Severity", "Description", "Action taken", "Owner notified", "Vet notified"]
+  },
+  {
+    id: "billing",
+    label: "Invoice",
+    fields: ["Owner", "Reservation", "Line items", "Discount", "GST", "Payment method", "Receipt"]
+  },
+  {
+    id: "staff",
+    label: "Staff shift",
+    fields: ["Staff member", "Role", "Shift date", "Start time", "End time", "Assigned tasks"]
+  },
+  {
+    id: "inventory",
+    label: "Inventory",
+    fields: ["Item", "Category", "Quantity", "Unit cost", "Reorder level", "Supplier"]
+  },
+  {
+    id: "admin",
+    label: "User / role",
+    fields: ["Tenant", "User", "Email", "Role", "Module permissions", "Active status"]
+  }
+];
 
 export function WireframeExplorer() {
   const [activeId, setActiveId] = useState<ScreenId>("dashboard");
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [tenantId, setTenantId] = useState(sampleTenants[0].id);
   const [eventLog, setEventLog] = useState<string[]>(["Wireframe loaded", "Super admin controls enabled"]);
   const [deviceTime, setDeviceTime] = useState("");
@@ -257,68 +341,93 @@ export function WireframeExplorer() {
           <div className="border-b border-[#3c3a36] bg-[#2a2a28] px-4 pb-4 pt-3">
             <div className="grid grid-cols-3 items-center text-xs font-bold text-[#d7d1c4]">
               <span>{deviceTime}</span>
-              <span className="text-center">{active.label}</span>
+              <span className="text-center">{isLoggedIn ? active.label : "Login"}</span>
               <span />
             </div>
             <div className="mt-7 flex items-center justify-between">
               <div>
-                <h1 className="text-lg font-bold leading-tight">{active.title}</h1>
-                <p className="text-sm text-[#d5c9b7]">{tenant.name} · {tenant.plan} plan</p>
+                <h1 className="text-lg font-bold leading-tight">{isLoggedIn ? active.title : "Sign in to PawBase"}</h1>
+                <p className="text-sm text-[#d5c9b7]">
+                  {isLoggedIn ? `${tenant.name} · ${tenant.plan} plan` : "admin@example.com · admin123"}
+                </p>
               </div>
-              <div className="grid h-10 w-10 place-items-center rounded-full text-[#ddd5c7]">
-                {active.id === "admin" ? <ShieldCheck size={22} /> : <Bell size={21} />}
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLoggedIn((current) => !current);
+                  pushEvent(isLoggedIn ? "Logged out" : "Logged in as super admin");
+                }}
+                className="grid h-10 w-10 place-items-center rounded-full border border-[#514f49] text-[#ddd5c7]"
+                aria-label={isLoggedIn ? "Log out" : "Log in"}
+                title={isLoggedIn ? "Log out" : "Log in"}
+              >
+                {isLoggedIn ? <LogOut size={20} /> : <LogIn size={20} />}
+              </button>
             </div>
-            <select
-              value={tenantId}
-              onChange={(event) => {
-                setTenantId(event.target.value);
-                pushEvent("Tenant context switched");
-              }}
-              className="mt-4 h-9 w-full rounded-md border border-[#4d4b46] bg-[#1f1f1d] px-3 text-sm font-bold text-[#f6f1e8]"
-              aria-label="Tenant"
-            >
-              {sampleTenants.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
+            {isLoggedIn ? (
+              <select
+                value={tenantId}
+                onChange={(event) => {
+                  setTenantId(event.target.value);
+                  pushEvent("Tenant context switched");
+                }}
+                className="mt-4 h-9 w-full rounded-md border border-[#4d4b46] bg-[#1f1f1d] px-3 text-sm font-bold text-[#f6f1e8]"
+                aria-label="Tenant"
+              >
+                {sampleTenants.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            ) : null}
           </div>
 
           <div className="max-h-[660px] min-h-[630px] overflow-y-auto px-4 pb-24 pt-4">
-            <div className="grid grid-cols-2 gap-3">
-              {active.stats.map((stat) => (
-                <div key={stat.label} className="rounded-md bg-[#242421] p-3">
-                  <div className="text-xs font-semibold text-[#c7bdad]">{stat.label}</div>
-                  <div className={`mt-1 text-xl font-bold ${stat.tone === "green" ? "text-[#60c94d]" : stat.tone === "amber" ? "text-[#e3ae3c]" : "text-white"}`}>
-                    {stat.value}
-                  </div>
+            {isLoggedIn ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {active.stats.map((stat) => (
+                    <div key={stat.label} className="rounded-md bg-[#242421] p-3">
+                      <div className="text-xs font-semibold text-[#c7bdad]">{stat.label}</div>
+                      <div className={`mt-1 text-xl font-bold ${stat.tone === "green" ? "text-[#60c94d]" : stat.tone === "amber" ? "text-[#e3ae3c]" : "text-white"}`}>
+                        {stat.value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="mt-3 rounded-lg border border-[#46433d] bg-[#2b2b29] p-4">
-              <div className="flex items-center justify-between">
-                <div className="font-bold">Occupancy</div>
-                <ActiveIcon size={18} className="text-[#2fb080]" />
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#24231f]">
-                <div className="h-full w-3/4 rounded-full bg-[#2fad7e]" />
-              </div>
-              <div className="mt-1 text-xs font-semibold text-[#d7cfbf]">18 of 24 units occupied — 75%</div>
-            </div>
-
-            <ModulePanel active={active} tenant={tenant} onEvent={pushEvent} />
-
-            <section className="mt-4">
-              <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Transactions</h2>
-              <div className="grid gap-2">
-                {eventLog.map((item) => (
-                  <div key={item} className="rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-semibold text-[#d8cfbf]">
-                    {item}
+                <div className="mt-3 rounded-lg border border-[#46433d] bg-[#2b2b29] p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold">Occupancy</div>
+                    <ActiveIcon size={18} className="text-[#2fb080]" />
                   </div>
-                ))}
-              </div>
-            </section>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#24231f]">
+                    <div className="h-full w-3/4 rounded-full bg-[#2fad7e]" />
+                  </div>
+                  <div className="mt-1 text-xs font-semibold text-[#d7cfbf]">18 of 24 units occupied — 75%</div>
+                </div>
+
+                <ModulePanel active={active} tenant={tenant} onEvent={pushEvent} onNavigate={setActiveId} />
+
+                <section className="mt-4">
+                  <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Transactions</h2>
+                  <div className="grid gap-2">
+                    {eventLog.map((item) => (
+                      <div key={item} className="rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-semibold text-[#d8cfbf]">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            ) : (
+              <LoginPanel
+                onLogin={() => {
+                  setIsLoggedIn(true);
+                  setActiveId("dashboard");
+                  pushEvent("Logged in as super admin");
+                }}
+              />
+            )}
           </div>
 
           <div className="absolute inset-x-0 bottom-0 flex gap-1 overflow-x-auto border-t border-[#3f3d38] bg-[#191918]/95 px-2 backdrop-blur">
@@ -349,13 +458,62 @@ export function WireframeExplorer() {
   );
 }
 
-function ModulePanel({ active, tenant, onEvent }: { active: Screen; tenant: (typeof sampleTenants)[number]; onEvent: (label: string) => void }) {
+function ModulePanel({
+  active,
+  tenant,
+  onEvent,
+  onNavigate
+}: {
+  active: Screen;
+  tenant: (typeof sampleTenants)[number];
+  onEvent: (label: string) => void;
+  onNavigate: (screen: ScreenId) => void;
+}) {
   if (active.id === "reservations") {
     return (
       <section className="mt-4">
         <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Reservation pipeline</h2>
         <div className="mb-3 rounded-md border border-[#46433d] bg-[#242421] px-3 py-2 text-xs font-bold text-[#d8cfbf]">
           Tenant-scoped bookings for {tenant.name}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            onEvent("New reservation entry started");
+            onNavigate("entry");
+          }}
+          className="mb-3 flex min-h-[58px] w-full items-center gap-3 rounded-lg border border-[#2fad7e] bg-[#18382d] p-3 text-left"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#34c084] text-white">
+            <Plus size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-bold">New reservation entry</span>
+            <span className="block truncate text-xs font-semibold text-[#bce8d5]">Owner, pet, dates, unit, services, quote</span>
+          </span>
+          <span className="rounded-full bg-[#ecf4ff] px-2 py-1 text-xs font-bold text-[#0d5c9d]">New</span>
+        </button>
+        <div className="mb-3 rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
+          <div className="mb-2 text-xs font-bold uppercase text-[#d7cfbf]">Quick entry form</div>
+          <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
+            {["Owner", "Pet", "Dates", "Unit"].map((field) => (
+              <button
+                key={field}
+                type="button"
+                onClick={() => onEvent(`${field} selected for new reservation`)}
+                className="h-10 rounded-md border border-[#4a4842] bg-[#20201e] px-2 text-left text-[#f6f1e8]"
+              >
+                {field}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => onEvent("Reservation saved as confirmed")}
+            className="mt-3 h-10 w-full rounded-md bg-[#34c084] text-sm font-bold text-white"
+          >
+            Save reservation
+          </button>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold">
           {["Inquiry", "Confirmed", "Checked-in"].map((stage, index) => (
@@ -375,6 +533,10 @@ function ModulePanel({ active, tenant, onEvent }: { active: Screen; tenant: (typ
         />
       </section>
     );
+  }
+
+  if (active.id === "entry") {
+    return <EntryPanel tenant={tenant} onEvent={onEvent} onNavigate={onNavigate} />;
   }
 
   if (active.id === "kennel") {
@@ -521,6 +683,183 @@ function ModulePanel({ active, tenant, onEvent }: { active: Screen; tenant: (typ
         </section>
       ))}
     </>
+  );
+}
+
+function EntryPanel({
+  tenant,
+  onEvent,
+  onNavigate
+}: {
+  tenant: (typeof sampleTenants)[number];
+  onEvent: (label: string) => void;
+  onNavigate: (screen: ScreenId) => void;
+}) {
+  const [selectedFormId, setSelectedFormId] = useState(entryForms[0].id);
+  const selectedForm = entryForms.find((form) => form.id === selectedFormId) ?? entryForms[0];
+
+  return (
+    <section className="mt-4">
+      <h2 className="mb-3 text-sm font-bold uppercase text-[#d7cfbf]">Data entry hub</h2>
+      <div className="rounded-lg border border-[#2fad7e] bg-[#18382d] p-3 text-xs font-bold text-[#bce8d5]">
+        All records created here are tenant-scoped to {tenant.name}
+      </div>
+
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        {entryForms.map((form) => (
+          <button
+            key={form.id}
+            type="button"
+            onClick={() => {
+              setSelectedFormId(form.id);
+              onEvent(`${form.label} entry selected`);
+            }}
+            className={`min-h-9 shrink-0 rounded-full border px-3 text-xs font-bold ${
+              selectedFormId === form.id
+                ? "border-[#34c084] bg-[#34c084] text-white"
+                : "border-[#4a4842] bg-[#20201e] text-[#d8cfbf]"
+            }`}
+          >
+            {form.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 grid gap-3 rounded-lg border border-[#46433d] bg-[#2c2c2a] p-3">
+        <div>
+          <div className="text-xs font-bold uppercase text-[#d7cfbf]">Active form</div>
+          <div className="mt-1 text-lg font-bold">{selectedForm.label}</div>
+        </div>
+        {selectedForm.fields.map((field, index) => (
+          <button
+            key={field}
+            type="button"
+            onClick={() => onEvent(`${selectedForm.label}: ${field} edited`)}
+            className="flex min-h-11 items-center justify-between rounded-md border border-[#4a4842] bg-[#20201e] px-3 text-left"
+          >
+            <span>
+              <span className="block text-[11px] font-bold uppercase text-[#cabead]">{field}</span>
+              <span className="block text-sm font-bold text-[#f6f1e8]">{sampleFieldValue(field, index)}</span>
+            </span>
+            <span className="rounded-full bg-[#ecf4ff] px-2 py-1 text-xs font-bold text-[#0d5c9d]">Edit</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            onEvent(`${selectedForm.label} saved`);
+            if (selectedForm.id === "reservation") {
+              onNavigate("reservations");
+            }
+          }}
+          className="h-11 rounded-md bg-[#34c084] text-sm font-bold text-white"
+        >
+          Save {selectedForm.label.toLowerCase()}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function sampleFieldValue(field: string, index: number) {
+  const values: Record<string, string> = {
+    Owner: "Asha Rao",
+    Pet: "Bruno",
+    "Check-in": "15 Jun 2026",
+    "Check-out": "19 Jun 2026",
+    "Kennel unit": "Garden A-03",
+    Services: "Boarding + grooming",
+    Quote: "₹8,400",
+    Deposit: "₹2,000",
+    Name: "Bruno",
+    Email: "admin@example.com",
+    "Primary phone": "+91 98000 00001",
+    Address: "Bengaluru",
+    "Emergency contact": "Kabir Menon",
+    Notes: "Handle with care",
+    Species: "Dog",
+    Breed: "Weimaraner",
+    Weight: "24 kg",
+    Temperament: "Social",
+    Vaccinations: "Rabies valid",
+    "Feeding notes": "Twice daily",
+    "Unit number": "A-03",
+    Type: "Garden Suite",
+    Capacity: "1 pet",
+    Rate: "₹1,800/night",
+    Status: "Available",
+    "Maintenance notes": "Sanitized",
+    Reservation: "BLR-1042",
+    "Condition notes": "Healthy arrival",
+    Photo: "Attached",
+    Documents: "Verified",
+    "Medication handover": "None",
+    "Staff signature": "Priya",
+    Feeding: "Morning complete",
+    Medication: "Due at 4pm",
+    Exercise: "Yard group A",
+    Mood: "Happy",
+    "Care notes": "Ate well",
+    Severity: "Medium",
+    Description: "Minor scrape",
+    "Action taken": "Cleaned and logged",
+    "Owner notified": "Yes",
+    "Vet notified": "No",
+    "Line items": "Boarding, grooming",
+    Discount: "0%",
+    GST: "18%",
+    "Payment method": "UPI",
+    Receipt: "Email + WhatsApp",
+    "Staff member": "Priya Nair",
+    Role: "Manager",
+    "Shift date": "13 Jun 2026",
+    "Start time": "09:00",
+    "End time": "17:00",
+    "Assigned tasks": "Care board",
+    Item: "Royal Canin",
+    Category: "Food",
+    Quantity: "12",
+    "Unit cost": "₹1,200",
+    "Reorder level": "10",
+    Supplier: "Pet Supply Co",
+    Tenant: "PawBase Bengaluru",
+    User: "PawBase Super Admin",
+    "Module permissions": "All controls",
+    "Active status": "Active"
+  };
+
+  return values[field] ?? `Sample value ${index + 1}`;
+}
+
+function LoginPanel({ onLogin }: { onLogin: () => void }) {
+  return (
+    <section className="grid gap-4">
+      <div className="rounded-lg border border-[#46433d] bg-[#2c2c2a] p-4">
+        <div className="mb-3 flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-[#34c084] text-white">
+            <LockKeyhole size={18} />
+          </span>
+          <div>
+            <div className="font-bold">Super admin login</div>
+            <div className="text-xs font-semibold text-[#cabead]">Multi-tenant SaaS control center</div>
+          </div>
+        </div>
+        <label className="grid gap-2 text-xs font-bold uppercase text-[#d7cfbf]">
+          Email
+          <input className="h-10 rounded-md border border-[#4a4842] bg-[#20201e] px-3 text-sm normal-case text-[#f6f1e8]" value="admin@example.com" readOnly />
+        </label>
+        <label className="mt-3 grid gap-2 text-xs font-bold uppercase text-[#d7cfbf]">
+          Password
+          <input className="h-10 rounded-md border border-[#4a4842] bg-[#20201e] px-3 text-sm normal-case text-[#f6f1e8]" value="admin123" readOnly type="password" />
+        </label>
+        <button type="button" onClick={onLogin} className="mt-4 h-11 w-full rounded-md bg-[#34c084] font-bold text-white">
+          Login
+        </button>
+      </div>
+      <div className="rounded-lg border border-[#46433d] bg-[#242421] p-3 text-xs font-semibold text-[#d8cfbf]">
+        Supabase login also exists at /login and uses the users table when environment variables are configured.
+      </div>
+    </section>
   );
 }
 
