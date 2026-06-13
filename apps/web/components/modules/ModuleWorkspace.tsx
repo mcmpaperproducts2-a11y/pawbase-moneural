@@ -332,11 +332,12 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
           <button
             type="button"
             onClick={() => setFormState({ mode: "create" })}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[#34c084] text-white"
-            aria-label={`New ${module.label}`}
-            title={`New ${module.label}`}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-[#34c084] px-3 text-sm font-bold text-white"
+            aria-label={module.primaryAction}
+            title={module.primaryAction}
           >
-            <Plus size={20} />
+            <Plus size={18} />
+            <span>{module.primaryAction}</span>
           </button>
         </div>
 
