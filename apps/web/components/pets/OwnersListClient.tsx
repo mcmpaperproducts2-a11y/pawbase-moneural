@@ -12,6 +12,10 @@ export function OwnersListClient({ initialOwners }: { initialOwners: OwnerWithCo
 
   useEffect(() => {
     setOwners((current) => mergeOwners(loadLocalOwners(), current));
+    fetch("/api/owners?active=all")
+      .then((response) => response.json())
+      .then((payload: { data?: OwnerWithCount[] }) => setOwners((current) => mergeOwners(payload.data ?? [], current)))
+      .catch(() => undefined);
   }, []);
 
   return (
