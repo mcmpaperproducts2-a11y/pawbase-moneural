@@ -198,7 +198,10 @@ function uniqueRecords(records: ModuleRecord[]) {
 
 function seedRelatedRecords(activeModule: ModuleDefinition) {
   return Object.fromEntries(
-    moduleDefinitionsForRelations(activeModule).map((definition) => [definition.id, definition.records])
+    moduleDefinitionsForRelations(activeModule).map((definition) => [
+      definition.id,
+      uniqueRecords([...loadStoredRecords(definition.id), ...definition.records])
+    ])
   ) as RelatedRecords;
 }
 
@@ -214,6 +217,27 @@ function mergeRelatedRecords(current: RelatedRecords, moduleId: string, records:
     ...current,
     [moduleId]: uniqueRecords([...records, ...(current[moduleId] ?? [])])
   };
+}
+
+function moduleStorageKey(moduleId: string) {
+  return `pawbase:${moduleId}:records`;
+}
+
+function loadStoredRecords(moduleId: string) {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(moduleStorageKey(moduleId));
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as ModuleRecord[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function storeModuleRecords(moduleId: string, records: ModuleRecord[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(moduleStorageKey(moduleId), JSON.stringify(uniqueRecords(records)));
 }
 
 function displayFieldValue(field: FieldDefinition, value: string) {
@@ -292,11 +316,12 @@ function getRecordAmount(moduleId: string, draft: DraftRecord, existing?: Module
 
 export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorkspaceProps) {
   const ownerModule = getModuleDefinition("owners");
-  const [records, setRecords] = useState(module.records);
+  const [records, setRecords] = useState(() => uniqueRecords([...loadStoredRecords(module.id), ...module.records]));
   const [relatedRecords, setRelatedRecords] = useState<RelatedRecords>(() => seedRelatedRecords(module));
   const [transactions, setTransactions] = useState(module.transactions);
   const [selectedId, setSelectedId] = useState(detailId ?? module.records[0]?.id);
   const [query, setQuery] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
   const [detailState, setDetailState] = useState<DetailState | null>(() =>
     mode === "detail"
       ? { module, record: module.records.find((record) => record.id === detailId) ?? module.records[0] }
@@ -327,7 +352,11 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
       .then((payload: { records?: ModuleRecord[]; transactions?: ModuleTransaction[] } | null) => {
         if (!active || !payload) return;
         if (payload.records?.length) {
-          setRecords(payload.records);
+          setRecords((current) => {
+            const merged = uniqueRecords([...current, ...(payload.records ?? [])]);
+            storeModuleRecords(module.id, merged);
+            return merged;
+          });
           setRelatedRecords((current) => mergeRelatedRecords(current, module.id, payload.records ?? []));
           setSelectedId((current) => current || payload.records?.[0]?.id || "");
         }
@@ -352,7 +381,11 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
         .then((payload: { records?: ModuleRecord[] } | null) => {
           const sourceRecords = payload?.records ?? [];
           if (active && sourceRecords.length) {
-            setRelatedRecords((current) => mergeRelatedRecords(current, sourceModuleId, sourceRecords));
+            setRelatedRecords((current) => {
+              const merged = mergeRelatedRecords(current, sourceModuleId, sourceRecords);
+              storeModuleRecords(sourceModuleId, merged[sourceModuleId] ?? []);
+              return merged;
+            });
           }
         })
         .catch(() => undefined);
@@ -401,20 +434,30 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
   }
 
   async function saveRecord(draft: DraftRecord) {
+    setNotice(null);
     const targetModule = formState?.module ?? module;
     const relatedDraft = enrichDraftWithRelations(targetModule, draft);
     const targetApiPath = getModuleApiPath(targetModule.id);
     if (formState?.mode === "edit" && formState.record) {
       const updated = buildRecordFromDraft(targetModule, relatedDraft, formState.record);
       if (targetModule.id === module.id) {
-        setRecords((current) => current.map((record) => (record.id === updated.id ? updated : record)));
+        setRecords((current) => {
+          const merged = current.map((record) => (record.id === updated.id ? updated : record));
+          storeModuleRecords(targetModule.id, merged);
+          return merged;
+        });
       }
-      setRelatedRecords((current) => mergeRelatedRecords(current, targetModule.id, [updated]));
+      setRelatedRecords((current) => {
+        const merged = mergeRelatedRecords(current, targetModule.id, [updated]);
+        storeModuleRecords(targetModule.id, merged[targetModule.id] ?? []);
+        return merged;
+      });
       setSelectedId(updated.id);
       setDetailState({ module: targetModule, record: updated });
       pushTransaction(`${targetModule.label} record updated`);
       setFormState(null);
       const payload = await saveToApi(targetApiPath, "PATCH", updated);
+      if (payload?.error) setNotice(`${targetModule.label} saved locally, but server save failed: ${payload.error}`);
       if (payload?.transactions) setTransactions(payload.transactions);
       return;
     }
@@ -423,30 +466,48 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
     const payload = await saveToApi(targetApiPath, "POST", draftRecord);
     const created = payload?.record ?? draftRecord;
     if (targetModule.id === module.id) {
-      setRecords((current) => [created, ...current]);
+      setRecords((current) => {
+        const merged = uniqueRecords([created, ...current]);
+        storeModuleRecords(targetModule.id, merged);
+        return merged;
+      });
     }
-    setRelatedRecords((current) => mergeRelatedRecords(current, targetModule.id, [created]));
+    setRelatedRecords((current) => {
+      const merged = mergeRelatedRecords(current, targetModule.id, [created]);
+      storeModuleRecords(targetModule.id, merged[targetModule.id] ?? []);
+      return merged;
+    });
     setSelectedId(created.id);
     setDetailState({ module: targetModule, record: created });
     pushTransaction(`${targetModule.primaryAction} completed`);
+    if (payload?.error) setNotice(`${targetModule.label} saved locally, but server save failed: ${payload.error}`);
     if (payload?.transactions) setTransactions(payload.transactions);
     setFormState(null);
   }
 
   async function deleteSelected(record: ModuleRecord, targetModule = module) {
+    setNotice(null);
     if (targetModule.id === module.id) {
       const nextRecord = records.find((item) => item.id !== record.id);
-      setRecords((current) => current.filter((item) => item.id !== record.id));
+      setRecords((current) => {
+        const merged = current.filter((item) => item.id !== record.id);
+        storeModuleRecords(targetModule.id, merged);
+        return merged;
+      });
       setSelectedId(nextRecord?.id ?? "");
-    } else if (targetModule.id === "owners") {
-      setRelatedRecords((current) => ({
+    }
+    setRelatedRecords((current) => {
+      const merged = {
         ...current,
         [targetModule.id]: (current[targetModule.id] ?? []).filter((item) => item.id !== record.id)
-      }));
-    }
+      };
+      storeModuleRecords(targetModule.id, merged[targetModule.id] ?? []);
+      return merged;
+    });
     setDetailState(null);
     pushTransaction(`${targetModule.label}: ${record.title} deleted`);
     const payload = await saveToApi(getModuleApiPath(targetModule.id), "DELETE", { id: record.id });
+    if (payload?.error) setNotice(`${targetModule.label} deleted locally, but server delete failed: ${payload.error}`);
     if (payload?.transactions) setTransactions(payload.transactions);
   }
 
@@ -480,6 +541,12 @@ export function ModuleWorkspace({ module, mode = "list", detailId }: ModuleWorks
           <Metric label="Txns" value={transactions.length.toString()} />
         </div>
       </section>
+
+      {notice ? (
+        <div className="rounded-md border border-[#7a5a24] bg-[#2b2112] p-3 text-sm font-semibold leading-5 text-[#f4d59a]">
+          {notice}
+        </div>
+      ) : null}
 
       {module.id === "pets" && ownerModule ? (
         <section className="rounded-lg border border-[#34322f] bg-[#201f1d] p-3">
@@ -630,8 +697,10 @@ async function saveToApi(apiPath: string, method: "POST" | "PATCH" | "DELETE", b
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
   }).catch(() => null);
-  if (!response?.ok) return null;
-  return (await response.json().catch(() => null)) as { record?: ModuleRecord; records?: ModuleRecord[]; transactions?: ModuleTransaction[] } | null;
+  if (!response) return { error: "network_error" };
+  const payload = (await response.json().catch(() => null)) as { record?: ModuleRecord; records?: ModuleRecord[]; transactions?: ModuleTransaction[]; error?: string } | null;
+  if (!response.ok) return { error: payload?.error ?? `HTTP ${response.status}` };
+  return payload;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
