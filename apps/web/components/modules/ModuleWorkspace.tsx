@@ -346,8 +346,8 @@ function DetailSheet({
   onStatus: (status: string) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-30 grid place-items-end bg-black/55" onClick={onClose}>
-      <section className="w-full max-w-[460px] rounded-t-2xl border border-[#34322f] bg-[#201f1d] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+    <div className="fixed inset-y-0 left-1/2 z-30 flex w-full max-w-[460px] -translate-x-1/2 items-end bg-black/55" onClick={onClose}>
+      <section className="max-h-[88vh] w-full overflow-y-auto rounded-t-2xl border border-[#34322f] bg-[#201f1d] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-[#4a4842]" />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -413,9 +413,9 @@ function RecordFormSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-end bg-black/55" onClick={onClose}>
+    <div className="fixed inset-y-0 left-1/2 z-40 flex w-full max-w-[460px] -translate-x-1/2 items-end bg-black/55" onClick={onClose}>
       <form
-        className="w-full max-w-[460px] rounded-t-2xl border border-[#34322f] bg-[#201f1d] p-4 shadow-2xl"
+        className="max-h-[88vh] w-full overflow-y-auto rounded-t-2xl border border-[#34322f] bg-[#201f1d] p-4 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
